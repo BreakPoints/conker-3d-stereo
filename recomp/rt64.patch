@@ -2343,7 +2343,7 @@ index 2970e71..201f657 100644
                  RenderWorkerExecution execution(ext.framebufferGraphicsWorker);
                  framebufferManager.uploadRAM(ext.framebufferGraphicsWorker, differentFbs.data(), differentFbs.size(), workload.fbChangePool, RDRAM, true, drawFbOperations, drawFbDiscards, ext.shaderLibrary);
 diff --git a/src/hle/rt64_workload_queue.cpp b/src/hle/rt64_workload_queue.cpp
-index 5a331aa..3a07bd9 100644
+index 5a331aa..e58bc5a 100644
 --- a/src/hle/rt64_workload_queue.cpp
 +++ b/src/hle/rt64_workload_queue.cpp
 @@ -4,6 +4,17 @@
@@ -2364,7 +2364,7 @@ index 5a331aa..3a07bd9 100644
  #include "common/rt64_thread.h"
  
  #include "rt64_present_queue.h"
-@@ -212,6 +223,19 @@ namespace RT64 {
+@@ -212,6 +223,20 @@ namespace RT64 {
          workloadConfig.downsampleMultiplier = ext.sharedResources->userConfig.downsampleMultiplier;
          ext.sharedResources->resolutionScale = workloadConfig.resolutionScale;
  
@@ -2375,16 +2375,17 @@ index 5a331aa..3a07bd9 100644
 +        workloadConfig.stereoEnabled = (workloadConfig.stereoMode != UserConfiguration::StereoMode::Off) && (msaaSampleCount <= 1);
 +        workloadConfig.stereoSeparation = float(ext.sharedResources->userConfig.stereoSeparation);
 +
-+        // Conker: auto-convergence. The manual slider stays the ceiling; the loop only
-+        // ever pulls closer, following the last frame's scene depth (readback below).
++        // Conker: auto-convergence. The manual slider stays the ceiling; auto only ever
++        // pulls closer, fitted per scene (see the scene changes in the render loop).
 +        stereoAutoConvergence.setSettings(ext.sharedResources->userConfig.stereoAutoConvergence,
-+            workloadConfig.stereoSeparation, float(ext.sharedResources->userConfig.stereoConvergence));
++            float(ext.sharedResources->userConfig.stereoConvergence));
 +        workloadConfig.stereoConvergence = stereoAutoConvergence.applied();
++        workloadConfig.stereoFocusDepth = stereoAutoConvergence.focusDepth();
 +
          // Find the target refresh rate from the configuration.
          const auto refreshRate = ext.sharedResources->userConfig.refreshRate;
          switch (refreshRate) {
-@@ -292,7 +316,8 @@ namespace RT64 {
+@@ -292,7 +317,8 @@ namespace RT64 {
      void WorkloadQueue::threadRenderFrame(GameFrame &curFrame, const GameFrame &prevFrame, const WorkloadConfiguration &workloadConfig,
          const DebuggerRenderer &debuggerRenderer, const DebuggerCamera &debuggerCamera, float curFrameWeight, float prevFrameWeight,
          float deltaTimeMs, RenderTargetKey overrideTargetKey, int32_t overrideTargetFbPairIndex, RenderTarget *overrideTarget,
@@ -2394,7 +2395,7 @@ index 5a331aa..3a07bd9 100644
      {
  #   if ENABLE_HIGH_RESOLUTION_RENDERER
          std::scoped_lock<std::mutex> managerLock(ext.sharedResources->workloadMutex);
-@@ -301,9 +326,13 @@ namespace RT64 {
+@@ -301,9 +327,13 @@ namespace RT64 {
          const bool usingMSAA = (targetManager.multisampling.sampleCount > 1);
  
          rendererCPUProfiler.start();
@@ -2409,7 +2410,7 @@ index 5a331aa..3a07bd9 100644
          bool uploadProjections = false;
          if (processProjections) {
              ProjectionProcessor::ProcessParams projParams;
-@@ -314,12 +343,21 @@ namespace RT64 {
+@@ -314,12 +344,22 @@ namespace RT64 {
              projParams.curFrameWeight = curFrameWeight;
              projParams.prevFrameWeight = prevFrameWeight;
              projParams.aspectRatioScale = workloadConfig.aspectRatioScale;
@@ -2417,6 +2418,7 @@ index 5a331aa..3a07bd9 100644
 +            projParams.stereoEye = stereoEye;
 +            projParams.stereoSeparation = workloadConfig.stereoSeparation;
 +            projParams.stereoConvergence = workloadConfig.stereoConvergence;
++            projParams.stereoCameraCut = workloadConfig.stereoCameraCut;
              projectionProcessor.process(projParams);
              projectionProcessor.upload(projParams);
              uploadProjections = true;
@@ -2432,7 +2434,7 @@ index 5a331aa..3a07bd9 100644
          bool uploadTransforms = false;
          if (processTransforms) {
              TransformProcessor::ProcessParams transformParams;
-@@ -335,7 +373,7 @@ namespace RT64 {
+@@ -335,7 +375,7 @@ namespace RT64 {
          }
  
          bool uploadTiles = false;
@@ -2441,7 +2443,7 @@ index 5a331aa..3a07bd9 100644
              TileProcessor::ProcessParams tileParams;
              tileParams.worker = ext.workloadGraphicsWorker;
              tileParams.workloadQueue = this;
-@@ -349,7 +387,7 @@ namespace RT64 {
+@@ -349,7 +389,7 @@ namespace RT64 {
          }
  
          bool uploadLookAts = false;
@@ -2450,7 +2452,7 @@ index 5a331aa..3a07bd9 100644
              LookAtProcessor::ProcessParams lookAtParams;
              lookAtParams.worker = ext.workloadGraphicsWorker;
              lookAtParams.workloadQueue = this;
-@@ -449,6 +487,15 @@ namespace RT64 {
+@@ -449,6 +489,15 @@ namespace RT64 {
                          colorFb = &fbManager.get(colorImg.address, colorImg.siz, nativeColorWidth, nativeColorHeight);
                      }
  
@@ -2466,7 +2468,7 @@ index 5a331aa..3a07bd9 100644
                      if (colorFb != nullptr) {
                          fbKey.colorTargetKey = RenderTargetKey(colorFb->addressStart, colorFb->width, colorFb->siz, Framebuffer::Type::Color);
                          colorTarget = &targetManager.get(fbKey.colorTargetKey);
-@@ -508,6 +555,16 @@ namespace RT64 {
+@@ -508,6 +557,16 @@ namespace RT64 {
              colorDepthPairs.clear();
  
              const uint32_t fbPairCount = (debuggerRenderer.framebufferIndex >= 0) ? (debuggerRenderer.framebufferIndex + 1) : workload.fbPairCount;
@@ -2483,7 +2485,7 @@ index 5a331aa..3a07bd9 100644
              for (uint32_t f = 0; f < fbPairCount; f++) {
                  const FramebufferPair &fbPair = workload.fbPairs[f];
  #           if RT_ENABLED
-@@ -538,9 +595,19 @@ namespace RT64 {
+@@ -538,9 +597,19 @@ namespace RT64 {
                          depthFb->nativeTarget.resetBufferHistory();
                      }
  
@@ -2503,7 +2505,7 @@ index 5a331aa..3a07bd9 100644
                      }
  
                      // Set up the dummy target used for rendering the depth if no depth framebuffer is active.
-@@ -566,6 +633,9 @@ namespace RT64 {
+@@ -566,6 +635,9 @@ namespace RT64 {
                          if (depthTarget->resize(ext.workloadGraphicsWorker, rtWidth, rtHeight)) {
                              resizedTargets.emplace(depthTarget);
                              depthFb->readHeight = 0;
@@ -2513,7 +2515,7 @@ index 5a331aa..3a07bd9 100644
                          }
                      }
                  }
-@@ -577,6 +647,10 @@ namespace RT64 {
+@@ -577,6 +649,10 @@ namespace RT64 {
              // Make sure all depth targets are at least bigger than their corresponding color targets.
              for (auto colorDepthPair : colorDepthPairs) {
                  if (colorDepthPair.second->resize(ext.workloadGraphicsWorker, colorDepthPair.first->width, colorDepthPair.first->height)) {
@@ -2524,7 +2526,7 @@ index 5a331aa..3a07bd9 100644
                      resizedTargets.emplace(colorDepthPair.second);
                  }
              }
-@@ -612,9 +686,22 @@ namespace RT64 {
+@@ -612,9 +688,22 @@ namespace RT64 {
              }
  #       endif
  
@@ -2547,7 +2549,7 @@ index 5a331aa..3a07bd9 100644
                      RenderFramebufferStorage &fbStorage = renderFramebufferManager->get(fbKey, colorTarget, (depthTarget != nullptr) ? depthTarget : dummyDepthTarget.get());
                      FramebufferRenderer::DrawParams drawParams;
                      drawParams.worker = ext.workloadGraphicsWorker;
-@@ -639,6 +726,13 @@ namespace RT64 {
+@@ -639,6 +728,13 @@ namespace RT64 {
                      drawParams.postBlendNoise = workloadConfig.postBlendNoise;
                      drawParams.postBlendNoiseNegative = workloadConfig.postBlendNoiseNegative;
                      drawParams.maxGameCall = std::min(gameCallCountMax - gameCallCursor, fbPair.gameCallCount);
@@ -2556,12 +2558,12 @@ index 5a331aa..3a07bd9 100644
 +            drawParams.stereoConvergence = workloadConfig.stereoConvergence;
 +            // Conker: the auto-convergence loop's focus depth, for the rectangles of
 +            // scripted scenes (see DrawParams::stereoFocusDepth).
-+            drawParams.stereoFocusDepth = stereoAutoConvergence.focusDepth();
++            drawParams.stereoFocusDepth = workloadConfig.stereoFocusDepth;
 +            drawParams.stereoEye = stereoEye;
                      framebufferRenderer->addFramebuffer(drawParams);
                  }
                  
-@@ -709,6 +803,12 @@ namespace RT64 {
+@@ -709,6 +805,12 @@ namespace RT64 {
              for (uint32_t f = 0; f < fbPairCount; f++) {
                  const FramebufferPair &fbPair = workload.fbPairs[f];
                  bool validTargets = getTargetsFromPair(f);
@@ -2574,7 +2576,7 @@ index 5a331aa..3a07bd9 100644
                  fbManager.recordOperations(ext.workloadGraphicsWorker, &workload.fbChangePool, &workload.fbStorage, ext.shaderLibrary, ext.textureCache,
                      fbPair.startFbOperations, targetManager, fixedResScale, f, workload.submissionFrame);
  
-@@ -738,6 +838,11 @@ namespace RT64 {
+@@ -738,6 +840,11 @@ namespace RT64 {
  
                          if (colorFb->height > colorFb->readHeight) {
                              uint32_t readRowCount = colorFb->height - colorFb->readHeight;
@@ -2586,7 +2588,7 @@ index 5a331aa..3a07bd9 100644
                              FramebufferChange *colorFbChange = colorFb->readChangeFromStorage(ext.workloadGraphicsWorker, workload.fbStorage, scratchFbChangePool,
                                  Framebuffer::Type::Color, colorImg.fmt, f, colorFb->readHeight, readRowCount, ext.shaderLibrary);
  
-@@ -756,10 +861,20 @@ namespace RT64 {
+@@ -756,10 +863,20 @@ namespace RT64 {
                          depthFbTypeChanged = (depthFb->lastWriteType == Framebuffer::Type::Color);
  
                          bool imgFormatChanged = (colorFb == nullptr) ? colorImg.formatChanged : depthImg.formatChanged;
@@ -2607,7 +2609,7 @@ index 5a331aa..3a07bd9 100644
                              RenderTargetKey otherDepthTargetKey(depthFb->addressStart, depthFb->width, depthFb->siz, depthFb->lastWriteType);
                              RenderTarget &otherDepthTarget = targetManager.get(otherDepthTargetKey);
                              if (!otherDepthTarget.isEmpty()) {
-@@ -777,6 +892,10 @@ namespace RT64 {
+@@ -777,6 +894,10 @@ namespace RT64 {
  
                          if (depthFb->height > depthFb->readHeight) {
                              uint32_t readRowCount = depthFb->height - depthFb->readHeight;
@@ -2618,18 +2620,18 @@ index 5a331aa..3a07bd9 100644
                              FramebufferChange *depthFbChange = depthFb->readChangeFromStorage(ext.workloadGraphicsWorker, workload.fbStorage, scratchFbChangePool, Framebuffer::Type::Depth,
                                  G_IM_FMT_DEPTH, f, depthFb->readHeight, readRowCount, ext.shaderLibrary);
  
-@@ -837,17 +956,35 @@ namespace RT64 {
+@@ -837,17 +958,35 @@ namespace RT64 {
                      fbPair.endFbOperations, targetManager, fixedResScale, f, workload.submissionFrame);
              }
  
-+            // Conker: auto-convergence. Copy the depth image the frame just rendered
-+            // (the first eye's: both eyes share the game's depth buffer) into a readback
-+            // buffer. It is mapped after the worker's fence below, so the control loop
-+            // has this frame's depth by the time the next frame's configuration is built.
++            // Conker: auto-convergence. On a scene's first frame, copy the depth image
++            // the left eye just rendered into a readback buffer (the depth doesn't depend
++            // on the eye: the stereo shift only moves x). It is mapped after the worker's
++            // fence below, so the render loop can snap to it before the right eye.
 +            // TEMP-DEBUG: CONKER_DEPTH_DUMP also needs the depth image even when the
 +            // auto-convergence loop itself is off.
 +            static const bool depthDumpRequested = std::getenv("CONKER_DEPTH_DUMP") != nullptr;
-+            if ((stereoEye == 0) && workloadConfig.stereoEnabled && (stereoAutoConvergence.enabled || depthDumpRequested) && (autoConvergenceDepthTarget != nullptr)) {
++            if ((stereoEye == 0) && workloadConfig.stereoEnabled && (stereoAutoConvergence.wantsDepth() || depthDumpRequested) && (autoConvergenceDepthTarget != nullptr)) {
 +                recordAutoConvergenceCapture(ext.workloadGraphicsWorker->commandList.get(), autoConvergenceDepthTarget);
 +            }
 +
@@ -2654,7 +2656,7 @@ index 5a331aa..3a07bd9 100644
  
              // Indicate to the texture cache it's safe to delete the textures if no locks are active.
              ext.textureCache->decrementLock();
-@@ -858,12 +995,201 @@ namespace RT64 {
+@@ -858,12 +997,206 @@ namespace RT64 {
          }
  
          framebufferRenderer->advanceFrame(workloadConfig.raytracingEnabled);
@@ -2745,7 +2747,7 @@ index 5a331aa..3a07bd9 100644
 +        // so w = -z and ndc = -m22 - m32/z). The generic solve the code below uses:
 +        //     z = (m32 - ndc*m33) / (ndc*m23 - m22)
 +        float zNear = 0.0f;
-+        float zLow = 0.0f, zHigh = 0.0f;
++        float zLow = 0.0f, zHigh = 0.0f, zMedian = 0.0f;
 +        // The same inversion parameters, kept for the CONKER_DEPTH_DUMP image below.
 +        float dumpM22 = 0.0f, dumpM32 = 0.0f, dumpM23 = 0.0f, dumpM33 = 0.0f;
 +        float dumpVpScale = 1.0f, dumpVpTranslate = 0.0f;
@@ -2785,14 +2787,19 @@ index 5a331aa..3a07bd9 100644
 +            // one stray particle must not yank the control loop.
 +            const size_t nearIndex = (samples.size() * 2) / 100;
 +            const size_t farIndex = std::min((samples.size() * 98) / 100, samples.size() - 1);
++            const size_t medianIndex = samples.size() / 2;
 +            std::nth_element(samples.begin(), samples.begin() + nearIndex, samples.end());
 +            zLow = samples[nearIndex];
++            std::nth_element(samples.begin(), samples.begin() + medianIndex, samples.end());
++            zMedian = samples[medianIndex];
 +            std::nth_element(samples.begin(), samples.begin() + farIndex, samples.end());
 +            zHigh = samples[farIndex];
 +            zNear = std::min(zLow, zHigh);
 +        }
 +
-+        stereoAutoConvergence.update(zNear);
++        // Snapped to by the render loop (see the stereo render below).
++        autoConvergencePendingNear = zNear;
++        autoConvergencePendingMedian = zMedian;
 +
 +        // TEMP-DEBUG: CONKER_DEPTH_DUMP writes this frame's view-depth image (device
 +        // depth inverted through the world camera's z row) as a 16-bit PGM in the
@@ -2846,8 +2853,8 @@ index 5a331aa..3a07bd9 100644
 +        // lines: the console redirect drops characters from long ones.
 +        static const bool autoConvLog = std::getenv("CONKER_RT64_AUTOCONV_LOG") != nullptr;
 +        if (autoConvLog && !samples.empty()) {
-+            std::fprintf(stderr, "[RT64] ac: z2 %8.1f z98 %8.1f near %8.1f conv %.1f\n",
-+                double(zLow), double(zHigh), double(zNear), double(stereoAutoConvergence.applied()));
++            std::fprintf(stderr, "[RT64] ac: z2 %8.1f z50 %8.1f z98 %8.1f\n",
++                double(zLow), double(zMedian), double(zHigh));
 +        }
 +
 +        autoConvergenceReadback->unmap();
@@ -2856,7 +2863,51 @@ index 5a331aa..3a07bd9 100644
      void WorkloadQueue::threadAdvanceBarrier() {
          std::scoped_lock<std::mutex> cursorLock(cursorMutex);
          barrierCursor = (barrierCursor + 1) % workloads.size();
-@@ -1030,13 +1356,35 @@ namespace RT64 {
+@@ -926,6 +1259,43 @@ namespace RT64 {
+                 uint32_t workloadIndex = processCursor;
+                 curFrame.set(*this, &workloadIndex, 1);
+ 
++                // Conker: auto-convergence's scene changes. The world camera cutting (or
++                // coming back after frames without it: loading, FMV, the first frame)
++                // starts a scene: the convergence snaps to it in the render loop below, and
++                // its camera isn't interpolated from the previous shot.
++                workloadConfig.stereoCameraCut = false;
++                bool stereoCameraFound = false;
++                if (workloadConfig.stereoEnabled && stereoAutoConvergence.enabled) {
++                    hlslpp::float4x4 cameraView, cameraProj;
++                    stereoCameraFound = ProjectionProcessor::findStereoWorldCamera(curFrame, *this, cameraView, cameraProj);
++                    if (stereoCameraFound) {
++                        float cameraMove = 0.0f, cameraTurn = 0.0f, cameraFovRatio = 1.0f;
++                        const bool cut = !stereoCameraValid || StereoAutoConvergence::isCameraCut(stereoCameraView, stereoCameraProj, cameraView, cameraProj,
++                            stereoAutoConvergence.sceneMedian, cameraMove, cameraTurn, cameraFovRatio);
++                        if (cut) {
++                            workloadConfig.stereoCameraCut = true;
++                            stereoAutoConvergence.requestSnap();
++                        }
++
++                        // TEMP-DEBUG: CONKER_RT64_AUTOCONV_LOG prints the cuts, and the camera
++                        // changes that came within half of a cut threshold, to tune them.
++                        static const bool cutLog = std::getenv("CONKER_RT64_AUTOCONV_LOG") != nullptr;
++                        const float sceneMedian = stereoAutoConvergence.sceneMedian;
++                        const bool nearMiss = (cameraTurn > StereoAutoConvergence::CutRotationDegrees * 0.5f) ||
++                            ((sceneMedian > 0.0f) && (cameraMove > sceneMedian * StereoAutoConvergence::CutTranslationFraction * 0.5f)) ||
++                            (cameraFovRatio > 1.0f + (StereoAutoConvergence::CutFovRatio - 1.0f) * 0.5f);
++                        if (cutLog && (cut || nearMiss)) {
++                            std::fprintf(stderr, "[RT64] ac %s move %.1f/%.1f turn %.1f fov %.3f\n",
++                                cut ? "CUT " : "near", double(cameraMove), double(sceneMedian), double(cameraTurn), double(cameraFovRatio));
++                        }
++
++                        stereoCameraView = cameraView;
++                        stereoCameraProj = cameraProj;
++                    }
++                }
++
++                stereoCameraValid = stereoCameraFound;
++
+                 // Detect the color image to interpolate for this workload.
+                 RenderTargetKey interpolationTargetKey;
+                 int32_t interpolationTargetFbPairIndex = -1;
+@@ -1030,13 +1400,35 @@ namespace RT64 {
                  // If the same set of counters is used, we wait until the presentation of its targets is finished so the targets are available to use. Waiting is ignored
                  // if the frame counter has never presented anything yet, as it'll only be a valid value if the previous present event actually did something.
                  else if (generateInterpolatedFrames) {
@@ -2892,7 +2943,7 @@ index 5a331aa..3a07bd9 100644
                  curFrameCounters.skipped = false;
                  curFrameCounters.presented = 0;
                  curFrameCounters.available = 0;
-@@ -1046,7 +1394,10 @@ namespace RT64 {
+@@ -1046,7 +1438,10 @@ namespace RT64 {
                  auto &interpolatedTargets = ext.sharedResources->interpolatedColorTargets;
                  const bool usingMSAA = (ext.sharedResources->renderTargetManager.multisampling.sampleCount > 1);
                  const bool usesHDR = ext.sharedResources->renderTargetManager.usesHDR;
@@ -2904,7 +2955,7 @@ index 5a331aa..3a07bd9 100644
                  if ((requiredFrames > 0) && (interpolatedTargets.size() < requiredFrames)) {
                      uint32_t previousSize = uint32_t(interpolatedTargets.size());
                      interpolatedTargets.resize(requiredFrames);
-@@ -1061,6 +1412,7 @@ namespace RT64 {
+@@ -1061,6 +1456,7 @@ namespace RT64 {
                  const int64_t maxTimePerFrameMicro = adjustedTimeWindowMicro / displayFrames;
                  bool skippedFrames = false;
                  bool skipWorkloadNow = false;
@@ -2912,7 +2963,7 @@ index 5a331aa..3a07bd9 100644
                  uint32_t targetIndex = 0;
                  uint32_t framesRendered = 0;
                  int64_t renderTimeTotalMicro = 0;
-@@ -1073,6 +1425,7 @@ namespace RT64 {
+@@ -1073,6 +1469,7 @@ namespace RT64 {
                          if ((currentTimeMicro > expectedTimeMicro) || ((currentTimeMicro + measuredFrameMicro) > adjustedTimeWindowMicro)) {
                              displayTicks += workload.viOriginalRate;
                              skippedFrames = true;
@@ -2920,7 +2971,7 @@ index 5a331aa..3a07bd9 100644
                              continue;
                          }
                      }
-@@ -1084,8 +1437,9 @@ namespace RT64 {
+@@ -1084,8 +1481,9 @@ namespace RT64 {
                          displayTicks += workload.viOriginalRate;
                          curFrameWeight = std::clamp((workloadConfig.targetRate + displayTicks - logicalTicks) / float(workloadConfig.targetRate), 0.0f, 1.0f);
  
@@ -2932,13 +2983,18 @@ index 5a331aa..3a07bd9 100644
                              overrideTarget = interpolatedTargets[targetIndex].get();
                              overrideModifier = (targetIndex + 1);
  
-@@ -1117,8 +1471,25 @@ namespace RT64 {
+@@ -1117,8 +1515,58 @@ namespace RT64 {
                      }
  
                      int64_t renderTimeMicro = workloadTimer.elapsedMicroseconds();
 -                    threadRenderFrame(curFrame, prevFrame, workloadConfig, workload.debuggerRenderer, workload.debuggerCamera, curFrameWeight, prevFrameWeight, deltaTimeMs,
 -                        interpolationTargetKey, interpolationTargetFbPairIndex, overrideTarget, overrideModifier, velocityUploaderUsed, uploadExtras, tileInterpolationUsed, lookAtInterpolationUsed);
 +                    if (stereoActive) {
++                        // Conker: auto-convergence. Latched once per display frame, so both eyes
++                        // always share it.
++                        workloadConfig.stereoConvergence = stereoAutoConvergence.applied();
++                        workloadConfig.stereoFocusDepth = stereoAutoConvergence.focusDepth();
++
 +                        // Conker: render each eye in its own target. The second eye uses the
 +                        // same interpolated frame weights, so both show the same instant. The
 +                        // targets are indexed by the frames rendered so far, not by the display
@@ -2949,6 +3005,34 @@ index 5a331aa..3a07bd9 100644
 +                            RenderTarget *eyeTarget = interpolatedTargets[eyeTargetIndex].get();
 +                            threadRenderFrame(curFrame, prevFrame, workloadConfig, workload.debuggerRenderer, workload.debuggerCamera, curFrameWeight, prevFrameWeight, deltaTimeMs,
 +                                interpolationTargetKey, interpolationTargetFbPairIndex, eyeTarget, eyeTargetIndex + 1, velocityUploaderUsed, uploadExtras, tileInterpolationUsed, lookAtInterpolationUsed, stereoEye);
++
++                            // Conker: auto-convergence. A scene's first frame rendered its left eye
++                            // with the previous scene's convergence to read its depth back: snap to
++                            // the new scene and render that eye again, so the new shot's very first
++                            // displayed frame already has its own depth (once per scene; while the
++                            // frame has no depth yet the snap waits for the next one).
++                            if ((stereoEye == 0) && stereoAutoConvergence.wantsDepth()) {
++                                stereoAutoConvergence.snap(autoConvergencePendingNear, autoConvergencePendingMedian);
++                                autoConvergencePendingNear = 0.0f;
++                                autoConvergencePendingMedian = 0.0f;
++
++                                const float snappedConvergence = stereoAutoConvergence.applied();
++                                const float snappedFocus = stereoAutoConvergence.focusDepth();
++                                const bool snapChanged = (snappedConvergence != workloadConfig.stereoConvergence) || (snappedFocus != workloadConfig.stereoFocusDepth);
++                                // TEMP-DEBUG: CONKER_RT64_AUTOCONV_LOG prints every snap.
++                                static const bool snapLog = std::getenv("CONKER_RT64_AUTOCONV_LOG") != nullptr;
++                                if (snapLog && !stereoAutoConvergence.snapPending) {
++                                    std::fprintf(stderr, "[RT64] ac snap near %.1f conv %.1f -> %.1f\n",
++                                        double(stereoAutoConvergence.sceneNear), double(workloadConfig.stereoConvergence), double(snappedConvergence));
++                                }
++
++                                if (snapChanged) {
++                                    workloadConfig.stereoConvergence = snappedConvergence;
++                                    workloadConfig.stereoFocusDepth = snappedFocus;
++                                    threadRenderFrame(curFrame, prevFrame, workloadConfig, workload.debuggerRenderer, workload.debuggerCamera, curFrameWeight, prevFrameWeight, deltaTimeMs,
++                                        interpolationTargetKey, interpolationTargetFbPairIndex, eyeTarget, eyeTargetIndex + 1, velocityUploaderUsed, uploadExtras, tileInterpolationUsed, lookAtInterpolationUsed, stereoEye);
++                                }
++                            }
 +                        }
 +
 +                        targetIndex++;
@@ -2960,7 +3044,7 @@ index 5a331aa..3a07bd9 100644
  
                      // Add total time the frame took to render.
                      renderTimeTotalMicro += workloadTimer.elapsedMicroseconds() - renderTimeMicro;
-@@ -1129,7 +1500,7 @@ namespace RT64 {
+@@ -1129,7 +1577,7 @@ namespace RT64 {
                      }
  
                      // For every additional frame, we increase the frames available and notify the present queue.
@@ -2969,7 +3053,7 @@ index 5a331aa..3a07bd9 100644
                          {
                              std::scoped_lock<std::mutex> cursorLock(cursorMutex);
                              skipWorkloadNow = ((frame + 1) < displayFrames) && (writeCursor != threadCursor);
-@@ -1152,6 +1523,10 @@ namespace RT64 {
+@@ -1152,6 +1600,10 @@ namespace RT64 {
                      framesRendered++;
                  }
  
@@ -2981,7 +3065,7 @@ index 5a331aa..3a07bd9 100644
                  if (skippedFrames && !skipWorkloadNow) {
                      {
 diff --git a/src/hle/rt64_workload_queue.h b/src/hle/rt64_workload_queue.h
-index bde2f03..3a6435d 100644
+index bde2f03..a570e65 100644
 --- a/src/hle/rt64_workload_queue.h
 +++ b/src/hle/rt64_workload_queue.h
 @@ -12,6 +12,7 @@
@@ -2992,7 +3076,7 @@ index bde2f03..3a6435d 100644
  #include "render/rt64_tile_processor.h"
  #include "render/rt64_look_at_processor.h"
  #include "render/rt64_transform_processor.h"
-@@ -58,6 +59,13 @@ namespace RT64 {
+@@ -58,6 +59,20 @@ namespace RT64 {
              uint32_t targetRate = 0;
              bool postBlendNoise = false;
              bool postBlendNoiseNegative = false;
@@ -3002,19 +3086,34 @@ index bde2f03..3a6435d 100644
 +            UserConfiguration::StereoMode stereoMode = UserConfiguration::StereoMode::Off;
 +            float stereoSeparation = 0.0f;
 +            float stereoConvergence = 0.0f;
++            // Conker: the auto-convergence focus depth (see DrawParams::stereoFocusDepth).
++            // Both are latched once per display frame, so the two eyes of a pair always
++            // share them.
++            float stereoFocusDepth = 0.0f;
++            // Conker: auto-convergence. The world camera cut this game frame (see
++            // ProjectionProcessor::ProcessParams::stereoCameraCut).
++            bool stereoCameraCut = false;
 +            int32_t stereoEye = 0;
          };
  
          External ext;
-@@ -92,6 +100,17 @@ namespace RT64 {
+@@ -92,6 +107,25 @@ namespace RT64 {
          std::unique_ptr<VertexProcessor> vertexProcessor;
          std::unique_ptr<RenderTarget> dummyDepthTarget;
          std::unique_ptr<RenderQueryPool> queryPool;
 +        // Conker: auto-convergence (rt64_stereo_auto_convergence.h). The control loop,
-+        // plus the scene depth readback it is fed from: the last framebuffer pair's
-+        // depth image is copied to a readback buffer while rendering the frame and
-+        // mapped right after the render worker's fence, before the next frame is built.
++        // plus the scene depth readback it is fed from: on a scene's first frame, the
++        // widest framebuffer pair's depth image is copied to a readback buffer while
++        // rendering the left eye and mapped right after the render worker's fence; its
++        // nearest and median depths wait in autoConvergencePendingNear/Median for the
++        // render loop to snap the scene to. stereoCamera* is the last game frame's world
++        // camera, which the next one is compared with to find the cuts.
 +        StereoAutoConvergence stereoAutoConvergence;
++        float autoConvergencePendingNear = 0.0f;
++        float autoConvergencePendingMedian = 0.0f;
++        bool stereoCameraValid = false;
++        hlslpp::float4x4 stereoCameraView;
++        hlslpp::float4x4 stereoCameraProj;
 +        std::unique_ptr<RenderBuffer> autoConvergenceReadback;
 +        uint64_t autoConvergenceReadbackBytes = 0;
 +        uint32_t autoConvergenceReadbackPitch = 0;
@@ -3024,7 +3123,7 @@ index bde2f03..3a6435d 100644
          FramebufferChangePool scratchFbChangePool;
          ProfilingTimer rendererCPUProfiler = ProfilingTimer(120);
          ProfilingTimer rendererGPUProfiler = ProfilingTimer(120);
-@@ -116,7 +135,14 @@ namespace RT64 {
+@@ -116,7 +150,14 @@ namespace RT64 {
          void threadRenderFrame(GameFrame &curFrame, const GameFrame &prevFrame, const WorkloadConfiguration &workloadConfig,
              const DebuggerRenderer &debuggerRenderer, const DebuggerCamera &debuggerCamera, float curFrameWeight, float prevFrameWeight,
              float deltaTimeMs, RenderTargetKey overrideTargetKey, int32_t overrideTargetFbPairIndex, RenderTarget *overrideTarget,
@@ -3502,7 +3601,7 @@ index 0000000..98a71d9
 +    };
 +};
 diff --git a/src/render/rt64_projection_processor.cpp b/src/render/rt64_projection_processor.cpp
-index e842dcc..bf1dae6 100644
+index e842dcc..243e653 100644
 --- a/src/render/rt64_projection_processor.cpp
 +++ b/src/render/rt64_projection_processor.cpp
 @@ -4,10 +4,23 @@
@@ -3529,7 +3628,7 @@ index e842dcc..bf1dae6 100644
      inline void adjustProjectionMatrix(interop::float4x4 &matrix, const float aspectRatioScale) {
          matrix[0][0] *= aspectRatioScale;
          matrix[1][0] *= aspectRatioScale;
-@@ -41,16 +54,44 @@ namespace RT64 {
+@@ -41,16 +54,73 @@ namespace RT64 {
              drawData.prevViewProjTransforms = drawData.viewProjTransforms;
          }
  
@@ -3546,9 +3645,10 @@ index e842dcc..bf1dae6 100644
          for (size_t s = 0; s < p.curFrame->orthographicScenes.size(); s++) {
 -            processScene(p, p.curFrame->orthographicScenes[s], s);
 +            processScene(p, p.curFrame->orthographicScenes[s], s, frameTagged);
-+        }
-+    }
-+
+         }
+     }
+ 
+-    void ProjectionProcessor::processScene(const ProcessParams &p, const GameScene &scene, size_t sceneIndex) {
 +    bool ProjectionProcessor::frameHasStereoWorldProjection(const ProcessParams &p) {
 +        if (!p.stereoEnabled) {
 +            return false;
@@ -3567,17 +3667,45 @@ index e842dcc..bf1dae6 100644
 +                    }
 +                }
 +            }
-         }
++        }
 +
 +        return false;
-     }
- 
--    void ProjectionProcessor::processScene(const ProcessParams &p, const GameScene &scene, size_t sceneIndex) {
++    }
++
++    bool ProjectionProcessor::findStereoWorldCamera(const GameFrame &frame, const WorkloadQueue &workloadQueue, hlslpp::float4x4 &view, hlslpp::float4x4 &proj) {
++        float bestArea = -1.0f;
++        for (const GameScene &scene : frame.perspectiveScenes) {
++            for (const GameIndices::Projection &sceneProj : scene.projections) {
++                const Workload &workload = workloadQueue.workloads[sceneProj.workloadIndex];
++                const DrawData &drawData = workload.drawData;
++                const FramebufferPair &fbPair = workload.fbPairs[sceneProj.fbPairIndex];
++                const Projection &proj_ = fbPair.projections[sceneProj.projectionIndex];
++                if ((proj_.type != Projection::Type::Perspective) || proj_.scissorRect.isNull()) {
++                    continue;
++                }
++
++                const uint32_t groupIndex = drawData.viewProjTransformGroups[proj_.transformsIndex];
++                if ((groupIndex >= drawData.transformGroups.size()) || (drawData.transformGroups[groupIndex].matrixId != conkerStereoWorldMatrixId)) {
++                    continue;
++                }
++
++                const float area = float(proj_.scissorRect.width(true, true)) * float(proj_.scissorRect.height(true, true));
++                if (area > bestArea) {
++                    bestArea = area;
++                    view = drawData.viewTransforms[proj_.transformsIndex];
++                    proj = drawData.projTransforms[proj_.transformsIndex];
++                }
++            }
++        }
++
++        return (bestArea >= 0.0f);
++    }
++
 +    void ProjectionProcessor::processScene(const ProcessParams &p, const GameScene &scene, size_t sceneIndex, bool frameHasStereoWorldProjection) {
          for (size_t i = 0; i < scene.projections.size(); i++) {
              const GameIndices::Projection &sceneProj = scene.projections[i];
              Workload &workload = p.workloadQueue->workloads[sceneProj.workloadIndex];
-@@ -92,13 +133,26 @@ namespace RT64 {
+@@ -92,13 +162,26 @@ namespace RT64 {
                  }
  
                  if (!intersectionRect.isEmpty()) {
@@ -3605,10 +3733,11 @@ index e842dcc..bf1dae6 100644
              interop::float4x4 &viewMatrix = drawData.modViewTransforms[proj.transformsIndex];
              interop::float4x4 &projMatrix = drawData.modProjTransforms[proj.transformsIndex];
              interop::float4x4 &viewProjMatrix = drawData.modViewProjTransforms[proj.transformsIndex];
-@@ -116,13 +170,42 @@ namespace RT64 {
+@@ -116,13 +199,45 @@ namespace RT64 {
  
              interop::float4x4 &prevViewTransform = drawData.prevViewTransforms[proj.transformsIndex];
              interop::float4x4 &prevProjTransform = drawData.prevProjTransforms[proj.transformsIndex];
+-            if ((prevProjMatrix != nullptr) && (prevViewMatrix != nullptr) && (rigidBody != nullptr)) {
 +
 +            // TEMP-DEBUG (Conker): CONKER_PERF_LOG, see common/rt64_perflog.h. In-between frames of
 +            // the world camera where it moved since the last game frame, and whether it was
@@ -3626,7 +3755,10 @@ index e842dcc..bf1dae6 100644
 +                }
 +            }
 +
-             if ((prevProjMatrix != nullptr) && (prevViewMatrix != nullptr) && (rigidBody != nullptr)) {
++            // Conker: a camera cut shows the new shot on every in-between frame, not a blend
++            // of the two shots' cameras.
++            const bool cameraCut = p.stereoCameraCut && (curProjGroup.matrixId == conkerStereoWorldMatrixId);
++            if ((prevProjMatrix != nullptr) && (prevViewMatrix != nullptr) && (rigidBody != nullptr) && !cameraCut) {
                  const interop::float4x4 curViewTransform = viewMatrix;
                  const interop::float4x4 curProjTransform = projMatrix;
                  interop::float4x4 adjustedPrevProj = *prevProjMatrix;
@@ -3650,7 +3782,7 @@ index e842dcc..bf1dae6 100644
  
                  // We only interpolate the projection if the view matrix has been interpolated.
                  const bool interpolateProjection = rigidBody->lerpTranslation || rigidBody->lerpRotation;
-@@ -140,6 +223,105 @@ namespace RT64 {
+@@ -140,6 +255,105 @@ namespace RT64 {
                  prevProjTransform = projMatrix;
              }
  
@@ -3757,10 +3889,10 @@ index e842dcc..bf1dae6 100644
  
              interop::float4x4 &prevViewProjTransform = drawData.prevViewProjTransforms[proj.transformsIndex];
 diff --git a/src/render/rt64_projection_processor.h b/src/render/rt64_projection_processor.h
-index 5bc3a2a..207a84f 100644
+index 5bc3a2a..94d126e 100644
 --- a/src/render/rt64_projection_processor.h
 +++ b/src/render/rt64_projection_processor.h
-@@ -21,13 +21,42 @@ namespace RT64 {
+@@ -21,13 +21,50 @@ namespace RT64 {
              float curFrameWeight = 1.0f;
              float prevFrameWeight = 0.0f;
              float aspectRatioScale = 1.0f;
@@ -3771,6 +3903,10 @@ index 5bc3a2a..207a84f 100644
 +            int32_t stereoEye = 0;
 +            float stereoSeparation = 0.0f;
 +            float stereoConvergence = 0.0f;
++            // The world camera cut this game frame (auto-convergence's scene change): its
++            // tagged projections aren't interpolated from the previous shot, every
++            // in-between frame shows the new one.
++            bool stereoCameraCut = false;
          };
  
 +        // Conker: the world camera's projection z row (the coefficients of z and 1 in
@@ -3798,6 +3934,10 @@ index 5bc3a2a..207a84f 100644
 -        void processScene(const ProcessParams &p, const GameScene &scene, size_t sceneIndex);
 +        // Whether any projection in the frame carries the host's world matrix ID.
 +        bool frameHasStereoWorldProjection(const ProcessParams &p);
++        // The game frame's world camera: the raw (not interpolated) view and projection
++        // of its tagged perspective projection covering the most screen. False when the
++        // frame has none.
++        static bool findStereoWorldCamera(const GameFrame &frame, const WorkloadQueue &workloadQueue, hlslpp::float4x4 &view, hlslpp::float4x4 &proj);
 +        // frameHasStereoWorldProjection: whether any projection in the frame carries the
 +        // host's world matrix ID (see conkerStereoWorldMatrixId in the .cpp).
 +        void processScene(const ProcessParams &p, const GameScene &scene, size_t sceneIndex, bool frameHasStereoWorldProjection);
@@ -3807,10 +3947,10 @@ index 5bc3a2a..207a84f 100644
 \ No newline at end of file
 diff --git a/src/render/rt64_stereo_auto_convergence.cpp b/src/render/rt64_stereo_auto_convergence.cpp
 new file mode 100644
-index 0000000..e3cd69b
+index 0000000..e0e6eb0
 --- /dev/null
 +++ b/src/render/rt64_stereo_auto_convergence.cpp
-@@ -0,0 +1,129 @@
+@@ -0,0 +1,98 @@
 +//
 +// RT64
 +//
@@ -3821,131 +3961,100 @@ index 0000000..e3cd69b
 +#include <cmath>
 +
 +namespace RT64 {
-+    void StereoAutoConvergence::setSettings(bool enabledValue, float separationValue, float manualConvergenceValue) {
-+        const bool wasEnabled = enabled;
++    void StereoAutoConvergence::setSettings(bool enabledValue, float manualConvergenceValue) {
 +        enabled = enabledValue;
-+        separation = separationValue;
-+        manualConvergence = manualConvergenceValue;
++        manualConvergence = std::max(manualConvergenceValue, NearClamp);
 +
-+        // Turning it on or off, or a fresh instance, starts from the manual value.
-+        if (!enabled || !wasEnabled || (appliedConvergence <= 0.0f)) {
-+            reset();
++        // Turning it off forgets the scene; turning it on fits the next frame.
++        if (!enabled) {
++            initialized = false;
++            snapPending = false;
++            sceneNear = 0.0f;
++            sceneMedian = 0.0f;
++        }
++        else if (!initialized) {
++            initialized = true;
++            snapPending = true;
 +        }
 +    }
 +
-+    void StereoAutoConvergence::reset() {
-+        rawCount = 0;
-+        rawIndex = 0;
-+        nearEma = 0.0f;
-+        invConvSmoothed = 0.0f;
-+        approachFrames = 0;
-+        appliedConvergence = manualConvergence;
-+    }
-+
-+    float StereoAutoConvergence::historyMedian() const {
-+        float values[HistorySize];
-+        for (uint32_t i = 0; i < rawCount; i++) {
-+            values[i] = rawHistory[i];
++    void StereoAutoConvergence::requestSnap() {
++        if (enabled) {
++            snapPending = true;
 +        }
-+
-+        std::sort(values, values + rawCount);
-+        return values[rawCount / 2];
 +    }
 +
-+    float StereoAutoConvergence::lastRawMedian() const {
-+        float values[3];
-+        const uint32_t count = std::min(rawCount, 3u);
-+        for (uint32_t i = 0; i < count; i++) {
-+            const uint32_t index = (rawIndex + HistorySize - 1 - i) % HistorySize;
-+            values[i] = rawHistory[index];
-+        }
-+
-+        std::sort(values, values + count);
-+        return values[count / 2];
-+    }
-+
-+    void StereoAutoConvergence::update(float zNear) {
++    void StereoAutoConvergence::snap(float zNear, float zMedian) {
 +        if (!enabled || !std::isfinite(zNear) || (zNear <= 1.0f)) {
 +            return;
 +        }
 +
-+        rawHistory[rawIndex] = zNear;
-+        rawIndex = (rawIndex + 1) % HistorySize;
-+        rawCount = std::min(rawCount + 1, HistorySize);
++        sceneNear = zNear;
++        sceneMedian = (std::isfinite(zMedian) && (zMedian >= zNear)) ? zMedian : zNear;
++        snapPending = false;
++    }
 +
-+        const float median = historyMedian();
-+        if (nearEma <= 0.0f) {
-+            nearEma = median;
++    float StereoAutoConvergence::applied() const {
++        if (!enabled || (sceneNear <= 0.0f)) {
++            return manualConvergence;
 +        }
-+        else {
-+            const float relative = std::fabs(median - nearEma) / nearEma;
-+            if (relative > NearDeadband) {
-+                const float alpha = (median < nearEma) ? NearAlpha : FarAlpha;
-+                nearEma += (median - nearEma) * alpha;
++
++        // The nearest object's total disparity at convergence c, in units of the
++        // separation, is c/near - 1 (each eye shifts by separation * (1 - c/z) in NDC, so
++        // the pair spans that fraction of the width): the budget caps c at
++        // near * (1 + budget). It doesn't depend on the separation, and the slider, the
++        // ceiling, applies at once without waiting for a scene.
++        const float fitted = sceneNear * (1.0f + TargetDisparityFraction);
++        return std::clamp(fitted, NearClamp, manualConvergence);
++    }
++
++    float StereoAutoConvergence::focusDepth() const {
++        return enabled ? sceneNear : 0.0f;
++    }
++
++    bool StereoAutoConvergence::isCameraCut(const hlslpp::float4x4 &prevView, const hlslpp::float4x4 &prevProj,
++        const hlslpp::float4x4 &curView, const hlslpp::float4x4 &curProj, float sceneMedian,
++        float &moveOut, float &rotationDegreesOut, float &fovRatioOut)
++    {
++        // Row-vector convention (clip = pos * view * proj): the camera's own transform is
++        // the view's inverse, its position the inverse's translation row.
++        const hlslpp::float4x4 prevCamera = hlslpp::inverse(prevView);
++        const hlslpp::float4x4 curCamera = hlslpp::inverse(curView);
++        const hlslpp::float3 prevPosition = prevCamera[3].xyz;
++        const hlslpp::float3 curPosition = curCamera[3].xyz;
++        moveOut = float(hlslpp::length(curPosition - prevPosition));
++
++        // The camera's axes in the world are the camera transform's rows; the largest
++        // angle between the matching axes of the two frames is the turn (normalized: the
++        // game's view matrices can carry a scale).
++        float minCos = 1.0f;
++        for (int axis = 0; axis < 3; axis++) {
++            const hlslpp::float3 a = prevCamera[axis].xyz;
++            const hlslpp::float3 b = curCamera[axis].xyz;
++            const float lengths = float(hlslpp::length(a)) * float(hlslpp::length(b));
++            if (lengths > 1e-12f) {
++                minCos = std::min(minCos, float(hlslpp::dot(a, b)) / lengths);
 +            }
 +        }
 +
-+        // Camera cuts. A cut to a close framing is exactly when a wrong convergence is
-+        // least tolerable, but the EMA above needs many frames to cross a step, so a
-+        // step is detected and snapped to. Approach only: a symmetric test thrashes
-+        // whenever something moves close to the camera. Tested on the raw sample, not
-+        // the median (the median needs half its window to cross a step).
-+        if (rawCount >= CutFrames + 1) {
-+            const float approach = (zNear < nearEma) ? (nearEma / zNear) : 1.0f;
-+            if (approach > CutRatio) {
-+                approachFrames++;
-+                if (approachFrames >= CutFrames) {
-+                    nearEma = lastRawMedian();
-+                    approachFrames = 0;
-+                    // Drop the smoother with the belief: the picture must jump with the
-+                    // cut, not ease across it (the next update re-initializes it to
-+                    // 1/convTarget). Without this the snap's protection arrives a dozen
-+                    // frames late, which is exactly the window a wrong convergence is
-+                    // least tolerable in.
-+                    invConvSmoothed = 0.0f;
-+                }
-+            }
-+            else {
-+                approachFrames = 0;
-+            }
-+        }
++        rotationDegreesOut = std::acos(std::clamp(minCos, -1.0f, 1.0f)) * (180.0f / 3.14159265f);
 +
-+        // Pull the convergence in until the nearest object's pop-out fits the budget.
-+        // The nearest object's TOTAL on-screen disparity is separation * (c/near - 1)
-+        // (fraction of the screen width: each eye shifts by separation * (1 - c/z) in
-+        // NDC, so the pair spans twice that in NDC = the same fraction of the width),
-+        // which is the same unit as the budget below.
-+        float convTarget = manualConvergence;
-+        if (separation > 0.0f) {
-+            const float targetDisparity = separation * TargetDisparityFraction;
-+            const float atManual = separation * (manualConvergence / nearEma - 1.0f);
-+            if (atManual > targetDisparity) {
-+                convTarget = nearEma * (1.0f + targetDisparity / separation);
-+            }
-+        }
++        // The vertical field of view's scale (P11 = 1/tan(half FoV)), which RT64's
++        // widescreen adjustment leaves alone.
++        const float prevScale = std::fabs(float(prevProj[1][1]));
++        const float curScale = std::fabs(float(curProj[1][1]));
++        fovRatioOut = ((prevScale > 1e-8f) && (curScale > 1e-8f)) ? (std::max(prevScale, curScale) / std::min(prevScale, curScale)) : 1.0f;
 +
-+        convTarget = std::clamp(convTarget, NearClamp, std::max(manualConvergence, NearClamp));
-+
-+        // Smooth 1/convergence, not convergence: disparity is linear in the reciprocal,
-+        // so lerping convergence would lunge over its last stretch.
-+        if (invConvSmoothed <= 0.0f) {
-+            invConvSmoothed = 1.0f / convTarget;
-+        }
-+        else {
-+            const float targetInv = 1.0f / convTarget;
-+            const float alpha = (targetInv > invConvSmoothed) ? InvNearAlpha : InvFarAlpha;
-+            invConvSmoothed += (targetInv - invConvSmoothed) * alpha;
-+        }
-+
-+        appliedConvergence = std::min(1.0f / invConvSmoothed, manualConvergence);
++        const bool moved = (sceneMedian > 0.0f) && (moveOut > sceneMedian * CutTranslationFraction);
++        return moved || (rotationDegreesOut > CutRotationDegrees) || (fovRatioOut > CutFovRatio);
 +    }
 +}
 diff --git a/src/render/rt64_stereo_auto_convergence.h b/src/render/rt64_stereo_auto_convergence.h
 new file mode 100644
-index 0000000..3e998b8
+index 0000000..3f27bba
 --- /dev/null
 +++ b/src/render/rt64_stereo_auto_convergence.h
-@@ -0,0 +1,55 @@
+@@ -0,0 +1,63 @@
 +//
 +// RT64
 +//
@@ -3954,51 +4063,59 @@ index 0000000..3e998b8
 +
 +#include <cstdint>
 +
++#include "common/rt64_math.h"
++
 +namespace RT64 {
-+    // Conker: auto-convergence (the dynamic3d skill's depth-buffer-driven control loop).
-+    // It is fed the nearest significant depth of the frame (a robust percentile of the
-+    // scene's depth buffer, in view-space units) and pulls the convergence in until that
-+    // depth's pop-out stays within a budget. The manual convergence stays the ceiling:
-+    // auto only ever pulls closer, never past it.
++    // Conker: auto-convergence, per scene. The convergence is fixed for the whole of a
++    // scene and snaps, on the scene's first frame, to fit that scene: within a scene the
++    // depth never changes, at all. A scene begins when the world camera cuts (it jumps in
++    // position, rotation or field of view between two game frames, see isCameraCut) or
++    // reappears after frames without it (loading, FMV, the first frame).
++    //
++    // The fit: the scene's nearest significant depth (a robust percentile of its depth
++    // buffer, in view-space units) gets a pop-out within a budget. The manual convergence
++    // stays the ceiling: auto only ever pulls closer, never past it.
 +    struct StereoAutoConvergence {
-+        static constexpr uint32_t HistorySize = 5;
 +        // The comfort budget for the nearest object's total on-screen disparity, as a
 +        // fraction of the separation (separation itself is the screen-width fraction
 +        // spanned by the background, so 0.4 keeps the nearest object's pop-out at 40%
 +        // of the background disparity).
 +        static constexpr float TargetDisparityFraction = 0.4f;
-+        static constexpr float NearDeadband = 0.005f;
-+        static constexpr float NearAlpha = 0.20f; // toward the camera: quick
-+        static constexpr float FarAlpha = 0.05f;  // away: slow, so it doesn't swim
-+        static constexpr float CutRatio = 2.5f;
-+        static constexpr uint32_t CutFrames = 2;
-+        static constexpr float InvNearAlpha = 0.14f;
-+        static constexpr float InvFarAlpha = 0.06f;
 +        static constexpr float NearClamp = 2.0f;
++        // A camera cut, between two consecutive game frames (33 ms): a turn no camera
++        // makes in that time, a move of a large part of the distance to the scene, or a
++        // jump in the field of view. A following camera stays well under all three.
++        static constexpr float CutRotationDegrees = 30.0f;
++        static constexpr float CutTranslationFraction = 0.5f; // of the scene's median depth
++        static constexpr float CutFovRatio = 1.2f;
 +
 +        bool enabled = false;
-+        float separation = 0.05f;
 +        float manualConvergence = 200.0f;
-+        float appliedConvergence = 200.0f;
++        bool initialized = false;
++        // Wants the next frame's depth to fit a new scene to.
++        bool snapPending = false;
++        // The current scene's nearest and median depths (0 while it has none yet).
++        float sceneNear = 0.0f;
++        float sceneMedian = 0.0f;
 +
-+        float rawHistory[HistorySize] = {};
-+        uint32_t rawCount = 0;
-+        uint32_t rawIndex = 0;
-+        float nearEma = 0.0f;
-+        float invConvSmoothed = 0.0f;
-+        uint32_t approachFrames = 0;
++        void setSettings(bool enabled, float manualConvergence);
++        // A scene begins with the frame being rendered: fit the convergence to its depth.
++        void requestSnap();
++        bool wantsDepth() const { return enabled && snapPending; }
++        // Fits the scene to a frame's depth, if it has any (zNear <= 0: none, the snap
++        // stays pending).
++        void snap(float zNear, float zMedian);
++        float applied() const;
++        // The scene's focus distance (its nearest depth, world units; 0 when the loop is
++        // off or has not fitted a scene yet).
++        float focusDepth() const;
 +
-+        void setSettings(bool enabled, float separation, float manualConvergence);
-+        void reset();
-+        void update(float zNear);
-+        float applied() const { return appliedConvergence; }
-+        // The scene's focus distance (the smoothed nearest depth, world units; 0 when
-+        // the loop is off or has not seen a frame yet).
-+        float focusDepth() const { return enabled ? nearEma : 0.0f; }
-+
-+    private:
-+        float historyMedian() const;
-+        float lastRawMedian() const;
++        // Whether the world camera cut between two game frames' view and projection
++        // matrices. sceneMedian scales the translation test (0: unknown, translation is
++        // not tested).
++        static bool isCameraCut(const hlslpp::float4x4 &prevView, const hlslpp::float4x4 &prevProj,
++            const hlslpp::float4x4 &curView, const hlslpp::float4x4 &curProj, float sceneMedian,
++            float &moveOut, float &rotationDegreesOut, float &fovRatioOut);
 +    };
 +}
 diff --git a/src/render/rt64_vi_renderer.cpp b/src/render/rt64_vi_renderer.cpp
