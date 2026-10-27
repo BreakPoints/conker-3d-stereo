@@ -38,6 +38,8 @@
 #include "recomp.h"
 #include "recompinput/input_state.h"
 
+
+
 namespace {
     // Degrees per pixel of mouse movement at 100% sensitivity.
     constexpr float degrees_per_pixel = 0.2f;

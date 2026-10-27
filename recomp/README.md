@@ -208,6 +208,12 @@ N64ModernRuntime (`n64modernruntime.patch`):
   made read-write only, and another thread running code on the same page (RT64's
   idle thread, every millisecond) crashed as the game started with mods on.
   macOS keeps read-write only, as Apple Silicon doesn't allow both.
+- `GraphicsConfig` gains the stereo options (see [Stereoscopy](#stereoscopy-conker)).
+
+RecompFrontend (`recompfrontend.patch`): the Graphics tab's stereo options (the
+3D Stereo selector, the separation and convergence sliders, hidden while the mode
+is Off) and their mapping into RT64's `UserConfiguration`. RmlUi, its submodule,
+keeps its own patch (`rmlui.patch`).
 
 RT64 (`rt64.patch`): Conker's graphics microcode, F3DEX2 with Rare's changes,
 as in GLideN64's `F3DEX2CBFD`. RT64 identifies a microcode by a hash of its
@@ -246,7 +252,9 @@ now compare with the projection's own scissor in that case.
 The patch adds a rect aspect, `G_EX_ASPECT_ZOOM`: stretched to the width like
 `G_EX_ASPECT_STRETCH`, and scaled as much vertically about the middle of the
 scissor, so the rectangle keeps its proportions and loses its top and bottom.
-The pause menu's background, a saved copy of the 4:3 frame, is drawn with it.
+The pause menu's background, a saved copy of the 4:3 frame, was drawn with it at
+first; it's drawn with `G_EX_ASPECT_STRETCH` now instead (a slight horizontal
+distortion of a blurred picture, rather than losing its top and bottom).
 
 A rectangle whose scissor spans the frame (with the same slack) is clipped at
 the edges of the widened frame, as widened 3D is, instead of at the 4:3 area.
@@ -286,6 +294,109 @@ last frame's projection (a perspective map from world position to texture
 coordinates, by least squares) and takes each vertex's coordinates last frame
 from it, if the fit is close, covers the texture and moves no vertex more than
 a quarter of the texture.
+
+### Stereoscopy (Conker)
+
+The patch adds stereo modes: side-by-side, cross-eye (the swapped side-by-side),
+top-and-bottom (over/under: the left eye on the top half), interlaced and
+interlaced reversed. They're in the launcher's Graphics tab (**3D
+Stereo**, **Stereo Separation**, **Stereo Convergence**), through a key added to
+`GraphicsConfig` (`ultramodern/config.hpp`, `n64modernruntime.patch`) and to
+RecompFrontend's graphics tab and RT64 mapping (`recompfrontend.patch`). The
+environment still overrides them, which is handy for scripted tests:
+`CONKER_STEREO_MODE` is `off`, `sbs`, `xview`, `tab`, `interlaced` or
+`interlaced_reversed`; `RT64_STEREO_*` works too.
+
+The renderer uses the **clip-space separation** parameterization (as in
+3Dmigoto/SuperDepth3D): `stereoSeparation` is the background disparity as a
+fraction of the screen width (default 0.05, comfortable up to ~0.1; Conker's
+projection scales it by about 0.55 in practice, so 0.05 is roughly 3% on
+screen), and `stereoConvergence` is the distance (world units) of the plane
+that sits on the screen (default 200). The projection gets a shear in its
+z-to-x term, and the eye baseline that cancels it at the convergence plane is
+derived per frame from the live horizontal half-FoV: because the derived
+baseline uses the aspect-adjusted projection, the on-screen depth no longer
+changes with the window's shape (it did while separation was in world units -
+measured at 16:9 vs 4:3: percentiles -0.025/-0.019/-0.014 vs
+-0.025/-0.021/-0.016 of the width, where the old form differed by ~26%).
+Raising convergence now only moves the screen plane; the background depth is
+set by separation alone.
+
+Each presented frame is rendered twice, once per eye, into two of the
+interpolated targets (`rt64_workload_queue.cpp`); the stereo transforms are
+applied to the camera's projections after interpolation
+(`rt64_projection_processor.cpp`). 2D content (HUD, menus, framebuffer effects)
+is orthographic and keeps zero parallax. The present queue composites the pair
+(`rt64_vi_renderer.cpp`, `VideoInterfacePS.hlsl`): two half-width draws for the
+side-by-side modes, one draw that picks a texture per scanline for the
+interlaced ones.
+
+Which projections count as the camera's is decided by RT64's matrix-group IDs.
+The host wraps each camera's setup (func_1515D6D0, which loads its projection
+matrix) in a view-projection matrix group tagged `0x434B0001`
+(`host/src/stereo.cpp`, `conker.toml`); RT64 shifts only projections carrying
+that ID (`conkerStereoWorldMatrixId`), so untagged perspective projections
+(menus, FMV) stay flat. A frame with no tagged projection at all falls back to
+shifting every perspective projection, so game paths that don't run the tagged
+function keep working. `CONKER_RT64_STEREO_LOG=1` prints each projection's ID
+and whether it was tagged.
+
+Screen-space sprites (sparks, smoke, bubbles: `func_15130A9C`) are projected by
+the game on the CPU, so RT64 only sees their rectangle and they would stay flat.
+The host hook that enables the extended GBI also sends the sprite's inverse view
+depth in the upper half of the enable command's second word, as a half-float
+(`host/src/widescreen.cpp`); RT64 stores it on the draw call and shifts the
+rectangle per eye by `separation * (1 - convergence / z)`, the same parallax the
+3D at that depth gets (`rt64_framebuffer_renderer.cpp`). Sprites without a depth
+(HUD, menus) stay at zero parallax, `CONKER_NO_SPRITE_STEREO=1` turns the
+feature off to compare, and the shift is clamped so a sprite near the camera
+plane can't fly off.
+
+The circle wipe (spawns, deaths, level changes: `func_15180580`,
+`host/src/widescreen.cpp`) is a screen-space overlay, but its black and the
+circle's quarters are drawn with the depth of what the played camera is looking
+at (`D_800DBFF0`, the look-at point that sits on Conker), so the hole lines up
+with the same piece of the picture in both eyes. The scripted wipes (the
+opening's keyhole) render through a camera of their own that no game structure
+holds, while the wipe and the game's own black sprites keep using the played
+camera where it was left, so no game state describes the scene inside the hole
+(measured: its content sits about 55 units away while the played camera's
+look-at says 400 and its sprites say 154). `CONKER_IRIS_STEREO_DEPTH=<units>`
+forces the distance for those (55 matches the opening's keyhole) and
+`CONKER_NO_IRIS_STEREO=1` leaves the wipe flat, to compare.
+
+The **Auto Convergence** option (Graphics tab, on by default;
+`CONKER_STEREO_AUTO_CONVERGENCE=0` turns it off) pulls the convergence in from the scene
+itself, so close-up shots never pop out uncomfortably. Each frame, the depth image of the
+widest framebuffer pair it rendered is copied to a readback buffer and mapped on the CPU
+(`rt64_workload_queue.cpp`); the tagged world camera's projection z row and its viewport
+z mapping invert the values back into view distances; the nearest significant geometry (a
+low percentile, not the literal nearest texel) feeds the control loop
+(`rt64_stereo_auto_convergence.h`): a five-frame median into an asymmetric EMA, a camera
+cut detected by an approach ratio and snapped rather than eased, and a smoothing in
+`1/convergence` space. The slider stays the ceiling - auto only ever pulls closer - and
+the pull-in target keeps the nearest content's pop-out within 40% of the separation's
+budget. `CONKER_RT64_AUTOCONV_LOG=1` prints the loop's inputs and the convergence the
+renderer is given. The loop reads the game's own depth: cutscenes that draw none (the
+opening's keyhole) leave the convergence alone.
+
+The opening's cutscene sequence (game mode 0x21: the chainsaw, the Rare logo and the
+keyhole) renders through a camera of its own while the played camera and the world's
+objects sit parked, and the game's screen-space sprites keep that parked world's depths
+(~1/160-1/180, the parked camera-to-player distance) while the picture on screen sits at
+~40. The host notices the mode and tells RT64 (`G_EX_SETSTEREOSCRIPTED_V1`, sent along
+with the stereo camera's tagging); a sprite whose own depth then claims to be more than
+twice the auto-convergence focus is given the focus instead, so its smoke and shadows
+pop with the picture around them. Sprites claiming plausible depths are left alone, and
+gameplay (mode 0x1D) never sets the flag. `CONKER_STEREO_SCRIPTED_LOG=1` prints it.
+
+MSAA and stereo
+don't mix yet (both eyes would draw into the same multisampled target), so
+antialiasing is turned off while a stereo mode is selected. The second eye's
+texture is declared before the VI descriptor set's immutable sampler on purpose:
+descriptor tables are packed in declaration order, while immutable samplers
+become static samplers with no table entry, so a texture declared after the
+sampler would be written past its table entry and sample as black.
 
 ## Audio
 

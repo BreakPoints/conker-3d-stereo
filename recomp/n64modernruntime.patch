@@ -206,6 +206,46 @@ index 5593172..70d4706 100644
  
  if (WIN32)
      add_compile_definitions(NOMINMAX)
+diff --git a/ultramodern/include/ultramodern/config.hpp b/ultramodern/include/ultramodern/config.hpp
+index 2f22456..264c78f 100644
+--- a/ultramodern/include/ultramodern/config.hpp
++++ b/ultramodern/include/ultramodern/config.hpp
+@@ -57,6 +57,19 @@ namespace ultramodern {
+             Off,
+             OptionCount
+         };
++        // Conker: stereoscopic output modes (see the Graphics tab and RT64's patch).
++        // LeiaSR weaves onto a Simulated Reality (glasses-free) display when one and
++        // its runtime are available; otherwise RT64 presents it as side by side.
++        enum class StereoMode {
++            Off,
++            SideBySide,
++            CrossEye,
++            Interlaced,
++            InterlacedReversed,
++            TopAndBottom,
++            LeiaSR,
++            OptionCount
++        };
+         enum class PresentationMode {
+             Console,
+             SkipBuffering,
+@@ -76,6 +89,15 @@ namespace ultramodern {
+             HighPrecisionFramebuffer hpfb_option;
+             int rr_manual_value;
+             int ds_option;
++            // Conker: stereoscopy. Separation is the background disparity as a fraction
++            // of the screen width (0..0.1 is the comfortable range); convergence is the
++            // distance (world units) of the zero-parallax plane.
++            StereoMode stereo_mode_option = StereoMode::Off;
++            double stereo_separation_option = 0.05;
++            double stereo_convergence_option = 200.0;
++            bool stereo_auto_convergence_option = false;
++            // The gamma lift the stereo modes present with (1 = none): out = in^(1/gamma).
++            double stereo_gamma_option = 1.0;
+ 
+             virtual ~GraphicsConfig() = default;
+ 
 diff --git a/ultramodern/include/ultramodern/ultramodern.hpp b/ultramodern/include/ultramodern/ultramodern.hpp
 index 46aea61..d04ad78 100644
 --- a/ultramodern/include/ultramodern/ultramodern.hpp

@@ -33,6 +33,10 @@
 
 #include "conker.hpp"
 
+// skip.cpp: the N64 buttons the skip button (Backspace / the controller's right
+// shoulder) presses in port 0 (START in the opening's cutscene sequence, L elsewhere).
+extern uint16_t conker_skip_pad_buttons;
+
 // recompui's launcher shows the first entry (ui_launcher.cpp declares it extern).
 std::vector<recomp::GameEntry> supported_games;
 // The game window, which recompui also uses (ui_state.cpp declares it extern).
@@ -417,6 +421,10 @@ namespace {
         if (!recompinput::game_input_disabled()) {
             // Port 1 has the keyboard, and its controller once one has pressed a button.
             read_port(port < count ? controllers[port] : nullptr, port == 0, buttons, x, y);
+            // The skip button, as the game's own skip input (skip.cpp).
+            if (port == 0) {
+                *buttons |= conker_skip_pad_buttons;
+            }
         }
         return true;
     }

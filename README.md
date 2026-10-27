@@ -26,6 +26,8 @@ yourself instead, read on.
 
 - Runs natively on Windows (Direct3D 12 or Vulkan), Linux (Vulkan) and macOS
   (Metal), rendered by RT64. Supports higher resolutions, widescreen,
+  stereoscopic 3D (side by side, cross-eye, top and bottom, interlaced, and
+  Leia SR panels on Windows with Direct3D 12) with automatic convergence,
   anti-aliasing and high frame-rate presentation.
 - Game controllers and keyboard, with remappable controls and rumble.
 - Full audio: music, sound effects and the voice acting.
@@ -39,8 +41,9 @@ yourself instead, read on.
 
 The game is playable, and has been played through to the end. Known issues:
 
-- Widescreen: the pause menu's blurred background is the 4:3 frame scaled up to
-  the full width, so its top and bottom are cropped.
+- Widescreen: the pause menu's blurred background is the 4:3 frame stretched to
+  the full width, so it is slightly distorted horizontally (it has no widescreen
+  content to show).
 - Environment-mapped (reflective) surfaces render without their reflection texture.
 - Frame rates above 30: characters snap once when the game changes how many parts
   it draws them with, a few times a minute, and the camera can blend across a cut.
@@ -212,8 +215,8 @@ Run `host/build/ConkerRecomp` (Linux and macOS) or `host\build-win\ConkerRecomp.
 **Start Game**.
 
 - **Settings** (in the launcher, or Esc / the controller's menu button in game)
-  has graphics (resolution, aspect ratio, anti-aliasing, frame rate), controls,
-  sound and mod options.
+  has graphics (resolution, aspect ratio, anti-aliasing, frame rate, 3D stereo
+  modes with separation and convergence), controls, sound and mod options.
 - Saves, settings and the stored ROM live in `~/.config/ConkerRecompiled` on
   Linux, `~/Library/Application Support/ConkerRecompiled` on macOS and
   `%LOCALAPPDATA%\ConkerRecompiled` on Windows. Put an empty `portable.txt` next
@@ -313,6 +316,10 @@ not to them.
   [RecompFrontend](https://github.com/N64Recomp/RecompFrontend) by Wiseguy and
   contributors.
 - [RT64](https://github.com/rt64/rt64) by Darío and contributors.
+- [oneup03](https://github.com/oneup03) — [rt64-3D](https://github.com/oneup03/rt64-3D),
+  the reference for stereoscopic rendering and the Leia SR weaving integration.
+- [bo3b](https://github.com/bo3b) — [SR-lib](https://github.com/bo3b/SR-lib), the Leia
+  SR weaver wrapper vendored as the `libs/SR-lib` submodule.
 - The mod headers follow the
   [Banjo: Recompiled mod template](https://github.com/BanjoRecomp/BKRecompModTemplate).
 - Fonts: [Inter](https://rsms.me/inter/), [Noto Emoji](https://fonts.google.com/noto/specimen/Noto+Emoji)
@@ -321,7 +328,9 @@ not to them.
 ## License
 
 This project's own code is under the [MIT License](LICENSE). The submodules keep
-their own licenses. The game itself is not included and not covered by it.
+their own licenses, and the proprietary Leia SR (Simulated Reality) SDK is not
+distributed here (see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)). The game
+itself is not included and not covered by it.
 
 Conker's Bad Fur Day is © Rare Ltd. This project is not affiliated with or
 endorsed by Rare, Microsoft or Nintendo.
