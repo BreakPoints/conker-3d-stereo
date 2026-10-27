@@ -178,10 +178,10 @@ index 1450565..032ed28 100644
 \ No newline at end of file
 diff --git a/src/common/rt64_perflog.h b/src/common/rt64_perflog.h
 new file mode 100644
-index 0000000..d766295
+index 0000000..c0800aa
 --- /dev/null
 +++ b/src/common/rt64_perflog.h
-@@ -0,0 +1,133 @@
+@@ -0,0 +1,189 @@
 +//
 +// RT64
 +//
@@ -233,6 +233,19 @@ index 0000000..d766295
 +            unsigned longIntervals = 0;
 +            double spanMax[SpanCount] = {};
 +            double spanSum[SpanCount] = {};
++            // Per game frame (workload): whether it could be interpolated, and what happened to
++            // the display frames it planned.
++            unsigned workloads = 0;
++            unsigned noInterpolationTarget = 0;
++            unsigned notInterpolated = 0;
++            unsigned framesPlanned = 0;
++            unsigned framesRendered = 0;
++            unsigned framesSkippedForTime = 0;
++            unsigned framesDroppedForNewer = 0;
++            // In-between display frames where the world camera moved since the last game frame,
++            // and how many of those interpolated it.
++            unsigned cameraMoved = 0;
++            unsigned cameraInterpolated = 0;
 +        };
 +
 +        inline bool enabled() {
@@ -269,6 +282,38 @@ index 0000000..d766295
 +            s.spanSum[span] += ms;
 +        }
 +
++        // One game frame: noTarget when RT64 found no frame it drew to interpolate, interpolated
++        // when it generated in-between frames, and how many of the planned display frames were
++        // rendered, skipped for lack of time, or dropped because a newer game frame was waiting.
++        inline void addWorkload(bool noTarget, bool interpolated, unsigned planned, unsigned rendered, unsigned skippedForTime, unsigned droppedForNewer) {
++            if (!enabled()) {
++                return;
++            }
++
++            State &s = state();
++            std::scoped_lock<std::mutex> lock(s.mutex);
++            s.workloads++;
++            s.noInterpolationTarget += noTarget ? 1 : 0;
++            s.notInterpolated += interpolated ? 0 : 1;
++            s.framesPlanned += planned;
++            s.framesRendered += rendered;
++            s.framesSkippedForTime += skippedForTime;
++            s.framesDroppedForNewer += droppedForNewer;
++        }
++
++        // An in-between display frame of the world camera that moved since the last game frame:
++        // interpolated when RT64 interpolated it rather than showing the game frame's camera.
++        inline void addCameraMove(bool interpolated) {
++            if (!enabled()) {
++                return;
++            }
++
++            State &s = state();
++            std::scoped_lock<std::mutex> lock(s.mutex);
++            s.cameraMoved++;
++            s.cameraInterpolated += interpolated ? 1 : 0;
++        }
++
 +        inline void addPresent(double presentCpuMs) {
 +            if (!enabled()) {
 +                return;
@@ -301,6 +346,17 @@ index 0000000..d766295
 +                }
 +
 +                std::fprintf(stderr, "\n");
++                std::fprintf(stderr, "[perfinterp] game frames %.1f/s | not interpolated %u (no target %u) | display frames planned %u rendered %u skipped-for-time %u dropped-for-newer %u | camera moving %u interpolated %u\n",
++                    s.workloads / seconds, s.notInterpolated, s.noInterpolationTarget, s.framesPlanned, s.framesRendered, s.framesSkippedForTime, s.framesDroppedForNewer, s.cameraMoved, s.cameraInterpolated);
++                s.cameraMoved = 0;
++                s.cameraInterpolated = 0;
++                s.workloads = 0;
++                s.noInterpolationTarget = 0;
++                s.notInterpolated = 0;
++                s.framesPlanned = 0;
++                s.framesRendered = 0;
++                s.framesSkippedForTime = 0;
++                s.framesDroppedForNewer = 0;
 +                std::fflush(stderr);
 +                s.windowStart = now;
 +                s.presents = 0;
@@ -2287,7 +2343,7 @@ index 2970e71..201f657 100644
                  RenderWorkerExecution execution(ext.framebufferGraphicsWorker);
                  framebufferManager.uploadRAM(ext.framebufferGraphicsWorker, differentFbs.data(), differentFbs.size(), workload.fbChangePool, RDRAM, true, drawFbOperations, drawFbDiscards, ext.shaderLibrary);
 diff --git a/src/hle/rt64_workload_queue.cpp b/src/hle/rt64_workload_queue.cpp
-index 5a331aa..4a78a55 100644
+index 5a331aa..3a07bd9 100644
 --- a/src/hle/rt64_workload_queue.cpp
 +++ b/src/hle/rt64_workload_queue.cpp
 @@ -4,6 +4,17 @@
@@ -2848,7 +2904,23 @@ index 5a331aa..4a78a55 100644
                  if ((requiredFrames > 0) && (interpolatedTargets.size() < requiredFrames)) {
                      uint32_t previousSize = uint32_t(interpolatedTargets.size());
                      interpolatedTargets.resize(requiredFrames);
-@@ -1084,8 +1435,9 @@ namespace RT64 {
+@@ -1061,6 +1412,7 @@ namespace RT64 {
+                 const int64_t maxTimePerFrameMicro = adjustedTimeWindowMicro / displayFrames;
+                 bool skippedFrames = false;
+                 bool skipWorkloadNow = false;
++                uint32_t perfSkippedForTime = 0;
+                 uint32_t targetIndex = 0;
+                 uint32_t framesRendered = 0;
+                 int64_t renderTimeTotalMicro = 0;
+@@ -1073,6 +1425,7 @@ namespace RT64 {
+                         if ((currentTimeMicro > expectedTimeMicro) || ((currentTimeMicro + measuredFrameMicro) > adjustedTimeWindowMicro)) {
+                             displayTicks += workload.viOriginalRate;
+                             skippedFrames = true;
++                            perfSkippedForTime++;
+                             continue;
+                         }
+                     }
+@@ -1084,8 +1437,9 @@ namespace RT64 {
                          displayTicks += workload.viOriginalRate;
                          curFrameWeight = std::clamp((workloadConfig.targetRate + displayTicks - logicalTicks) / float(workloadConfig.targetRate), 0.0f, 1.0f);
  
@@ -2860,7 +2932,7 @@ index 5a331aa..4a78a55 100644
                              overrideTarget = interpolatedTargets[targetIndex].get();
                              overrideModifier = (targetIndex + 1);
  
-@@ -1117,8 +1469,25 @@ namespace RT64 {
+@@ -1117,8 +1471,25 @@ namespace RT64 {
                      }
  
                      int64_t renderTimeMicro = workloadTimer.elapsedMicroseconds();
@@ -2888,7 +2960,7 @@ index 5a331aa..4a78a55 100644
  
                      // Add total time the frame took to render.
                      renderTimeTotalMicro += workloadTimer.elapsedMicroseconds() - renderTimeMicro;
-@@ -1129,7 +1498,7 @@ namespace RT64 {
+@@ -1129,7 +1500,7 @@ namespace RT64 {
                      }
  
                      // For every additional frame, we increase the frames available and notify the present queue.
@@ -2897,6 +2969,17 @@ index 5a331aa..4a78a55 100644
                          {
                              std::scoped_lock<std::mutex> cursorLock(cursorMutex);
                              skipWorkloadNow = ((frame + 1) < displayFrames) && (writeCursor != threadCursor);
+@@ -1152,6 +1523,10 @@ namespace RT64 {
+                     framesRendered++;
+                 }
+ 
++                // TEMP-DEBUG (Conker): CONKER_PERF_LOG, see common/rt64_perflog.h.
++                PerfLog::addWorkload(interpolationTargetKey.isEmpty(), generateInterpolatedFrames, displayFrames, framesRendered, perfSkippedForTime,
++                    displayFrames - std::min(displayFrames, framesRendered + perfSkippedForTime));
++
+                 // Set the skipped parameter on the frame counter if the workload wasn't skipped but some of its frames were.
+                 if (skippedFrames && !skipWorkloadNow) {
+                     {
 diff --git a/src/hle/rt64_workload_queue.h b/src/hle/rt64_workload_queue.h
 index bde2f03..3a6435d 100644
 --- a/src/hle/rt64_workload_queue.h
@@ -3419,10 +3502,10 @@ index 0000000..98a71d9
 +    };
 +};
 diff --git a/src/render/rt64_projection_processor.cpp b/src/render/rt64_projection_processor.cpp
-index e842dcc..ac055b6 100644
+index e842dcc..bf1dae6 100644
 --- a/src/render/rt64_projection_processor.cpp
 +++ b/src/render/rt64_projection_processor.cpp
-@@ -4,10 +4,22 @@
+@@ -4,10 +4,23 @@
  
  #include "rt64_projection_processor.h"
  
@@ -3432,6 +3515,7 @@ index e842dcc..ac055b6 100644
 +
 +#include "common/rt64_fblog.h"
  #include "common/rt64_math.h"
++#include "common/rt64_perflog.h"
  #include "hle/rt64_workload_queue.h"
  
  namespace RT64 {
@@ -3445,7 +3529,7 @@ index e842dcc..ac055b6 100644
      inline void adjustProjectionMatrix(interop::float4x4 &matrix, const float aspectRatioScale) {
          matrix[0][0] *= aspectRatioScale;
          matrix[1][0] *= aspectRatioScale;
-@@ -41,16 +53,44 @@ namespace RT64 {
+@@ -41,16 +54,44 @@ namespace RT64 {
              drawData.prevViewProjTransforms = drawData.viewProjTransforms;
          }
  
@@ -3462,10 +3546,9 @@ index e842dcc..ac055b6 100644
          for (size_t s = 0; s < p.curFrame->orthographicScenes.size(); s++) {
 -            processScene(p, p.curFrame->orthographicScenes[s], s);
 +            processScene(p, p.curFrame->orthographicScenes[s], s, frameTagged);
-         }
-     }
- 
--    void ProjectionProcessor::processScene(const ProcessParams &p, const GameScene &scene, size_t sceneIndex) {
++        }
++    }
++
 +    bool ProjectionProcessor::frameHasStereoWorldProjection(const ProcessParams &p) {
 +        if (!p.stereoEnabled) {
 +            return false;
@@ -3484,16 +3567,17 @@ index e842dcc..ac055b6 100644
 +                    }
 +                }
 +            }
-+        }
+         }
 +
 +        return false;
-+    }
-+
+     }
+ 
+-    void ProjectionProcessor::processScene(const ProcessParams &p, const GameScene &scene, size_t sceneIndex) {
 +    void ProjectionProcessor::processScene(const ProcessParams &p, const GameScene &scene, size_t sceneIndex, bool frameHasStereoWorldProjection) {
          for (size_t i = 0; i < scene.projections.size(); i++) {
              const GameIndices::Projection &sceneProj = scene.projections[i];
              Workload &workload = p.workloadQueue->workloads[sceneProj.workloadIndex];
-@@ -92,13 +132,26 @@ namespace RT64 {
+@@ -92,13 +133,26 @@ namespace RT64 {
                  }
  
                  if (!intersectionRect.isEmpty()) {
@@ -3521,7 +3605,29 @@ index e842dcc..ac055b6 100644
              interop::float4x4 &viewMatrix = drawData.modViewTransforms[proj.transformsIndex];
              interop::float4x4 &projMatrix = drawData.modProjTransforms[proj.transformsIndex];
              interop::float4x4 &viewProjMatrix = drawData.modViewProjTransforms[proj.transformsIndex];
-@@ -121,8 +174,20 @@ namespace RT64 {
+@@ -116,13 +170,42 @@ namespace RT64 {
+ 
+             interop::float4x4 &prevViewTransform = drawData.prevViewTransforms[proj.transformsIndex];
+             interop::float4x4 &prevProjTransform = drawData.prevProjTransforms[proj.transformsIndex];
++
++            // TEMP-DEBUG (Conker): CONKER_PERF_LOG, see common/rt64_perflog.h. In-between frames of
++            // the world camera where it moved since the last game frame, and whether it was
++            // interpolated.
++            if ((curProjGroup.matrixId == conkerStereoWorldMatrixId) && (p.stereoEye == 0) && (p.curFrameWeight < 0.999f) && (prevViewMatrix != nullptr)) {
++                float viewChange = 0.0f;
++                for (int r = 0; r < 4; r++) {
++                    for (int c = 0; c < 4; c++) {
++                        viewChange = std::max(viewChange, std::fabs(float(viewMatrix[r][c]) - float((*prevViewMatrix)[r][c])));
++                    }
++                }
++
++                if (viewChange > 1e-3f) {
++                    PerfLog::addCameraMove((rigidBody != nullptr) && (rigidBody->lerpTranslation || rigidBody->lerpRotation));
++                }
++            }
++
+             if ((prevProjMatrix != nullptr) && (prevViewMatrix != nullptr) && (rigidBody != nullptr)) {
+                 const interop::float4x4 curViewTransform = viewMatrix;
                  const interop::float4x4 curProjTransform = projMatrix;
                  interop::float4x4 adjustedPrevProj = *prevProjMatrix;
                  adjustProjectionMatrix(adjustedPrevProj, projRatioScale);
@@ -3544,7 +3650,7 @@ index e842dcc..ac055b6 100644
  
                  // We only interpolate the projection if the view matrix has been interpolated.
                  const bool interpolateProjection = rigidBody->lerpTranslation || rigidBody->lerpRotation;
-@@ -140,6 +205,105 @@ namespace RT64 {
+@@ -140,6 +223,105 @@ namespace RT64 {
                  prevProjTransform = projMatrix;
              }
  

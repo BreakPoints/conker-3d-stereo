@@ -63,13 +63,21 @@ namespace {
         dl += 8;
     }
 
+    // gEXMatrixGroup's interpolation for a camera: simple (not decomposed) interpolation of
+    // its position, rotation, scale, skew and perspective (bits 3, 5, 7, 9 and 11 set to
+    // G_EX_COMPONENT_INTERPOLATE), as RT64 interpolates a camera it has no group for. Left
+    // at zero these are G_EX_COMPONENT_SKIP, and RT64 then shows the camera at the game's
+    // own frame rate while everything else is interpolated.
+    constexpr uint32_t camera_interpolation_params = (1u << 3) | (1u << 5) | (1u << 7) | (1u << 9) | (1u << 11);
+
     // gEXMatrixGroup for the projection stack (projection = bit 1, push = bit 0), with
     // RT64's extended GBI enabled first (RT64 turns it off at the start of every
-    // display list). Without push, the group replaces the one on top.
-    void put_projection_group(uint8_t* rdram, gpr& dl, uint32_t id, bool push) {
+    // display list). Without push, the group replaces the one on top. interpolation is
+    // the group's component bits (camera_interpolation_params for the world camera).
+    void put_projection_group(uint8_t* rdram, gpr& dl, uint32_t id, bool push, uint32_t interpolation) {
         put_command(rdram, dl, (rt64_hook_opcode << 24) | rt64_hook_magic, (rt64_hook_op_enable << 28) | rt64_extended_opcode);
         put_command(rdram, dl, (rt64_extended_opcode << 24) | g_ex_matrixgroup_v1, id);
-        put_command(rdram, dl, 0x2 | (push ? 0x1 : 0x0), 0);
+        put_command(rdram, dl, 0x2 | (push ? 0x1 : 0x0) | interpolation, 0);
     }
 
     // gEXPopMatrixGroup: count 1, projection (bit 8 of the second word).
@@ -157,7 +165,7 @@ extern "C" void conker_stereo_world_begin(uint8_t* rdram, recomp_context* ctx) {
     gpr dl = ctx->r4;
     // Not pushed: the tag replaces the base of the projection stack, so the projections
     // the game builds from the camera later in the display list carry it too.
-    put_projection_group(rdram, dl, conker_stereo_world_id, false);
+    put_projection_group(rdram, dl, conker_stereo_world_id, false, camera_interpolation_params);
 
     // The opening's cutscene sequence renders through a camera of its own while the
     // played one stays parked, and the game's sprites keep the depths of that parked
@@ -180,7 +188,7 @@ extern "C" void conker_stereo_world_begin(uint8_t* rdram, recomp_context* ctx) {
 // anything: $a0 is its display list.
 extern "C" void conker_stereo_restore_begin(uint8_t* rdram, recomp_context* ctx) {
     gpr dl = ctx->r4;
-    put_projection_group(rdram, dl, conker_stereo_world_id, true);
+    put_projection_group(rdram, dl, conker_stereo_world_id, true, camera_interpolation_params);
     ctx->r4 = dl;
 }
 
@@ -199,7 +207,7 @@ extern "C" void conker_stereo_restore_end(uint8_t* rdram, recomp_context* ctx) {
 // restore it ends with tags itself.
 extern "C" void conker_shadow_image_begin(uint8_t* rdram, recomp_context* ctx) {
     gpr dl = ctx->r4;
-    put_projection_group(rdram, dl, 0, true);
+    put_projection_group(rdram, dl, 0, true, 0);
     ctx->r4 = dl;
 }
 
