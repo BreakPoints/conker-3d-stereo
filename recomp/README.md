@@ -660,19 +660,23 @@ look-at says 400 and its sprites say 154). `CONKER_IRIS_STEREO_DEPTH=<units>`
 forces the distance for those (55 matches the opening's keyhole) and
 `CONKER_NO_IRIS_STEREO=1` leaves the wipe flat, to compare.
 
-The **Auto Convergence** option (Graphics tab, on by default;
-`CONKER_STEREO_AUTO_CONVERGENCE=0` turns it off) pulls the convergence in from the scene
-itself, so close-up shots never pop out uncomfortably. Each frame, the depth image of the
-widest framebuffer pair it rendered is copied to a readback buffer and mapped on the CPU
-(`rt64_workload_queue.cpp`); the tagged world camera's projection z row and its viewport
-z mapping invert the values back into view distances; the nearest significant geometry (a
-low percentile, not the literal nearest texel) feeds the control loop
-(`rt64_stereo_auto_convergence.h`): a five-frame median into an asymmetric EMA, a camera
-cut detected by an approach ratio and snapped rather than eased, and a smoothing in
-`1/convergence` space. The slider stays the ceiling - auto only ever pulls closer - and
-the pull-in target keeps the nearest content's pop-out within 40% of the separation's
-budget. `CONKER_RT64_AUTOCONV_LOG=1` prints the loop's inputs and the convergence the
-renderer is given. The loop reads the game's own depth: cutscenes that draw none (the
+The **Auto Convergence** option (Graphics tab, off by default;
+`CONKER_STEREO_AUTO_CONVERGENCE=1` turns it on) pulls the convergence in from the scene
+itself, so close-up shots never pop out uncomfortably. It works per scene
+(`rt64_stereo_auto_convergence.h`): within a scene the convergence never changes, and on
+a scene's first frame it snaps to fit that scene. A scene begins when the tagged world
+camera cuts - between two game frames it turns more than 30 degrees, moves more than half
+the scene's median depth, or changes its field of view by more than 20% - or comes back
+after frames without it (loading, FMV, the first frame). On that frame the left eye is
+rendered, the depth image of the widest framebuffer pair is copied to a readback buffer
+and mapped on the CPU (`rt64_workload_queue.cpp`), the tagged camera's projection z row
+and its viewport z mapping invert it back into view distances, and the nearest significant
+geometry (a low percentile, not the literal nearest texel) sets the convergence: its
+pop-out is held to 40% of the separation. The left eye is then rendered again with it, so
+the new shot's first displayed frame already has its depth, and the cut frame's camera
+isn't interpolated from the previous shot. The slider stays the ceiling - auto only ever
+pulls closer. `CONKER_RT64_AUTOCONV_LOG=1` prints each cut (and camera changes within
+half of a threshold, to tune them), each snap, and the depth statistics it read. The loop reads the game's own depth: cutscenes that draw none (the
 opening's keyhole) leave the convergence alone.
 
 The opening's cutscene sequence (game mode 0x21: the chainsaw, the Rare logo and the
