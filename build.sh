@@ -202,6 +202,7 @@ apply_patch tools/N64Recomp recomp/n64recomp.patch
 apply_patch tools/N64ModernRuntime recomp/n64modernruntime.patch
 apply_patch tools/rt64 recomp/rt64.patch
 # RecompFrontend: mouse buttons can be bound (with the keyboard's controls).
+# Conker: the stereo options in the launcher's Graphics tab (see recomp/README.md).
 apply_patch tools/RecompFrontend recomp/recompfrontend.patch
 # RmlUi's fix for GCC 15 and later (RmlUi #766), which isn't in the RmlUi that RecompFrontend
 # uses: its robin_hood.h uses uint64_t without including <cstdint>. Unneeded, and skipped as

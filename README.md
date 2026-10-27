@@ -26,6 +26,8 @@ yourself instead, read on.
 
 - Runs natively on Windows (Direct3D 12 or Vulkan), Linux (Vulkan) and macOS
   (Metal), rendered by RT64. Supports higher resolutions, widescreen,
+  stereoscopic 3D (side by side, cross-eye, top and bottom, interlaced, and
+  Leia SR panels on Windows with Direct3D 12) with automatic convergence,
   anti-aliasing and high frame-rate presentation, with Conker, his shadow and the
   camera interpolated between the game's frames.
 - Widescreen across gameplay, menus, cutscenes (or 4:3 cutscenes, with the
@@ -72,6 +74,9 @@ The game is playable, and has been played through to the end. Known issues:
 
 - Widescreen: the pause menu's blurred background is the 4:3 frame scaled up to
   the full width, so its top and bottom are cropped.
+- Environment-mapped (reflective) surfaces render without their reflection texture.
+- Frame rates above 30: characters snap once when the game changes how many parts
+  it draws them with, a few times a minute, and the camera can blend across a cut.
 - Only the US ROM is supported (and ROM hacks that only change its assets: see
   [ROM hacks](#rom-hacks)).
 - Linux: the game is played on Linux with real GPU drivers, the Steam Deck
@@ -249,8 +254,9 @@ the settings' Quit prompt: the program restarts at the launcher.
 - **Settings** (in the launcher, or Esc / the controller's menu button in game)
   has its options by tab: General (deadzone, rumble), Camera (turning, the free
   camera, field of view, aiming with the stick), Mouse & Gyro, Graphics
-  (resolution, aspect ratio, anti-aliasing, frame rate, texture packs), Controls,
-  Sound, Achievements and Mods. The tabs scroll sideways when they don't all fit.
+  (resolution, aspect ratio, anti-aliasing, frame rate, texture packs, 3D stereo
+  modes with separation and convergence), Controls, Sound, Achievements and Mods.
+  The tabs scroll sideways when they don't all fit.
 - **Achievements** are the program's own, for reaching the game's scenes (the
   ones its Chapters menu lists), from the first death to the end credits. They're
   kept on this computer, in `achievements.txt` with the settings, and the
@@ -494,6 +500,10 @@ Bug reports, fixes and patches are welcome: see [CONTRIBUTING.md](CONTRIBUTING.m
 - [RT64](https://github.com/rt64/rt64) by Darío and contributors.
 - [ConkerBFDReloaded](https://github.com/DahSidiAbdallah/ConkerBFDReloaded) by
   dahmedvall95, whose widescreen pause background led to this project's.
+- [oneup03](https://github.com/oneup03) — [rt64-3D](https://github.com/oneup03/rt64-3D),
+  the reference for stereoscopic rendering and the Leia SR weaving integration.
+- [bo3b](https://github.com/bo3b) — [SR-lib](https://github.com/bo3b/SR-lib), the Leia
+  SR weaver wrapper vendored as the `libs/SR-lib` submodule.
 - The mod headers follow the
   [Banjo: Recompiled mod template](https://github.com/BanjoRecomp/BKRecompModTemplate).
 - Fonts: [Inter](https://rsms.me/inter/), [Noto Emoji](https://fonts.google.com/noto/specimen/Noto+Emoji)
@@ -502,7 +512,9 @@ Bug reports, fixes and patches are welcome: see [CONTRIBUTING.md](CONTRIBUTING.m
 ## License
 
 This project's own code is under the [MIT License](LICENSE). The submodules keep
-their own licenses, and a build combines them:
+their own licenses, and a build combines them; the proprietary Leia SR
+(Simulated Reality) SDK is not distributed here (see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)):
 
 - N64ModernRuntime (librecomp and ultramodern) is under the
   [GPL, version 3](tools/N64ModernRuntime/COPYING). As the program includes it,
