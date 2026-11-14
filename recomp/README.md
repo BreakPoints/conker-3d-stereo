@@ -215,6 +215,13 @@ RecompFrontend (`recompfrontend.patch`): the Graphics tab's stereo options (the
 is Off) and their mapping into RT64's `UserConfiguration`. RmlUi, its submodule,
 keeps its own patch (`rmlui.patch`).
 
+Plume, RT64's graphics layer and its submodule, keeps its own patch (`plume.patch`):
+copying a texture into a buffer, which the stereo auto-convergence depth readback
+does. Vulkan had no such copy (it fell through to texture-to-texture with no
+destination texture, and crashed), and D3D12 took sample positions from the missing
+destination texture. Metal still has no such copy, so RT64 doesn't read depth back
+on macOS and the convergence stays at the slider's value there.
+
 RT64 (`rt64.patch`): Conker's graphics microcode, F3DEX2 with Rare's changes,
 as in GLideN64's `F3DEX2CBFD`. RT64 identifies a microcode by a hash of its
 text and data. Conker's two builds ("F3DEXBG.NoN fifo 2.08" and "F3DEX.NoN fifo

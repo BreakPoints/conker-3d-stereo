@@ -2343,7 +2343,7 @@ index 2970e71..201f657 100644
                  RenderWorkerExecution execution(ext.framebufferGraphicsWorker);
                  framebufferManager.uploadRAM(ext.framebufferGraphicsWorker, differentFbs.data(), differentFbs.size(), workload.fbChangePool, RDRAM, true, drawFbOperations, drawFbDiscards, ext.shaderLibrary);
 diff --git a/src/hle/rt64_workload_queue.cpp b/src/hle/rt64_workload_queue.cpp
-index 5a331aa..e58bc5a 100644
+index 5a331aa..1da7660 100644
 --- a/src/hle/rt64_workload_queue.cpp
 +++ b/src/hle/rt64_workload_queue.cpp
 @@ -4,6 +4,17 @@
@@ -2620,7 +2620,7 @@ index 5a331aa..e58bc5a 100644
                              FramebufferChange *depthFbChange = depthFb->readChangeFromStorage(ext.workloadGraphicsWorker, workload.fbStorage, scratchFbChangePool, Framebuffer::Type::Depth,
                                  G_IM_FMT_DEPTH, f, depthFb->readHeight, readRowCount, ext.shaderLibrary);
  
-@@ -837,17 +958,35 @@ namespace RT64 {
+@@ -837,17 +958,42 @@ namespace RT64 {
                      fbPair.endFbOperations, targetManager, fixedResScale, f, workload.submissionFrame);
              }
  
@@ -2631,7 +2631,14 @@ index 5a331aa..e58bc5a 100644
 +            // TEMP-DEBUG: CONKER_DEPTH_DUMP also needs the depth image even when the
 +            // auto-convergence loop itself is off.
 +            static const bool depthDumpRequested = std::getenv("CONKER_DEPTH_DUMP") != nullptr;
-+            if ((stereoEye == 0) && workloadConfig.stereoEnabled && (stereoAutoConvergence.wantsDepth() || depthDumpRequested) && (autoConvergenceDepthTarget != nullptr)) {
++#       if defined(__APPLE__)
++            // Plume's Metal backend can't copy a texture into a buffer: the convergence
++            // stays at the manual value there.
++            constexpr bool depthReadbackSupported = false;
++#       else
++            constexpr bool depthReadbackSupported = true;
++#       endif
++            if (depthReadbackSupported && (stereoEye == 0) && workloadConfig.stereoEnabled && (stereoAutoConvergence.wantsDepth() || depthDumpRequested) && (autoConvergenceDepthTarget != nullptr)) {
 +                recordAutoConvergenceCapture(ext.workloadGraphicsWorker->commandList.get(), autoConvergenceDepthTarget);
 +            }
 +
@@ -2656,7 +2663,7 @@ index 5a331aa..e58bc5a 100644
  
              // Indicate to the texture cache it's safe to delete the textures if no locks are active.
              ext.textureCache->decrementLock();
-@@ -858,12 +997,206 @@ namespace RT64 {
+@@ -858,12 +1004,206 @@ namespace RT64 {
          }
  
          framebufferRenderer->advanceFrame(workloadConfig.raytracingEnabled);
@@ -2863,7 +2870,7 @@ index 5a331aa..e58bc5a 100644
      void WorkloadQueue::threadAdvanceBarrier() {
          std::scoped_lock<std::mutex> cursorLock(cursorMutex);
          barrierCursor = (barrierCursor + 1) % workloads.size();
-@@ -926,6 +1259,43 @@ namespace RT64 {
+@@ -926,6 +1266,43 @@ namespace RT64 {
                  uint32_t workloadIndex = processCursor;
                  curFrame.set(*this, &workloadIndex, 1);
  
@@ -2907,7 +2914,7 @@ index 5a331aa..e58bc5a 100644
                  // Detect the color image to interpolate for this workload.
                  RenderTargetKey interpolationTargetKey;
                  int32_t interpolationTargetFbPairIndex = -1;
-@@ -1030,13 +1400,35 @@ namespace RT64 {
+@@ -1030,13 +1407,35 @@ namespace RT64 {
                  // If the same set of counters is used, we wait until the presentation of its targets is finished so the targets are available to use. Waiting is ignored
                  // if the frame counter has never presented anything yet, as it'll only be a valid value if the previous present event actually did something.
                  else if (generateInterpolatedFrames) {
@@ -2943,7 +2950,7 @@ index 5a331aa..e58bc5a 100644
                  curFrameCounters.skipped = false;
                  curFrameCounters.presented = 0;
                  curFrameCounters.available = 0;
-@@ -1046,7 +1438,10 @@ namespace RT64 {
+@@ -1046,7 +1445,10 @@ namespace RT64 {
                  auto &interpolatedTargets = ext.sharedResources->interpolatedColorTargets;
                  const bool usingMSAA = (ext.sharedResources->renderTargetManager.multisampling.sampleCount > 1);
                  const bool usesHDR = ext.sharedResources->renderTargetManager.usesHDR;
@@ -2955,7 +2962,7 @@ index 5a331aa..e58bc5a 100644
                  if ((requiredFrames > 0) && (interpolatedTargets.size() < requiredFrames)) {
                      uint32_t previousSize = uint32_t(interpolatedTargets.size());
                      interpolatedTargets.resize(requiredFrames);
-@@ -1061,6 +1456,7 @@ namespace RT64 {
+@@ -1061,6 +1463,7 @@ namespace RT64 {
                  const int64_t maxTimePerFrameMicro = adjustedTimeWindowMicro / displayFrames;
                  bool skippedFrames = false;
                  bool skipWorkloadNow = false;
@@ -2963,7 +2970,7 @@ index 5a331aa..e58bc5a 100644
                  uint32_t targetIndex = 0;
                  uint32_t framesRendered = 0;
                  int64_t renderTimeTotalMicro = 0;
-@@ -1073,6 +1469,7 @@ namespace RT64 {
+@@ -1073,6 +1476,7 @@ namespace RT64 {
                          if ((currentTimeMicro > expectedTimeMicro) || ((currentTimeMicro + measuredFrameMicro) > adjustedTimeWindowMicro)) {
                              displayTicks += workload.viOriginalRate;
                              skippedFrames = true;
@@ -2971,7 +2978,7 @@ index 5a331aa..e58bc5a 100644
                              continue;
                          }
                      }
-@@ -1084,8 +1481,9 @@ namespace RT64 {
+@@ -1084,8 +1488,9 @@ namespace RT64 {
                          displayTicks += workload.viOriginalRate;
                          curFrameWeight = std::clamp((workloadConfig.targetRate + displayTicks - logicalTicks) / float(workloadConfig.targetRate), 0.0f, 1.0f);
  
@@ -2983,7 +2990,7 @@ index 5a331aa..e58bc5a 100644
                              overrideTarget = interpolatedTargets[targetIndex].get();
                              overrideModifier = (targetIndex + 1);
  
-@@ -1117,8 +1515,58 @@ namespace RT64 {
+@@ -1117,8 +1522,58 @@ namespace RT64 {
                      }
  
                      int64_t renderTimeMicro = workloadTimer.elapsedMicroseconds();
@@ -3044,7 +3051,7 @@ index 5a331aa..e58bc5a 100644
  
                      // Add total time the frame took to render.
                      renderTimeTotalMicro += workloadTimer.elapsedMicroseconds() - renderTimeMicro;
-@@ -1129,7 +1577,7 @@ namespace RT64 {
+@@ -1129,7 +1584,7 @@ namespace RT64 {
                      }
  
                      // For every additional frame, we increase the frames available and notify the present queue.
@@ -3053,7 +3060,7 @@ index 5a331aa..e58bc5a 100644
                          {
                              std::scoped_lock<std::mutex> cursorLock(cursorMutex);
                              skipWorkloadNow = ((frame + 1) < displayFrames) && (writeCursor != threadCursor);
-@@ -1152,6 +1600,10 @@ namespace RT64 {
+@@ -1152,6 +1607,10 @@ namespace RT64 {
                      framesRendered++;
                  }
  
