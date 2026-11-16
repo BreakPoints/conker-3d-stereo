@@ -372,7 +372,7 @@ index 0000000..c0800aa
 +    };
 +};
 diff --git a/src/common/rt64_user_configuration.cpp b/src/common/rt64_user_configuration.cpp
-index cc35442..4c879be 100644
+index cc35442..b511c6d 100644
 --- a/src/common/rt64_user_configuration.cpp
 +++ b/src/common/rt64_user_configuration.cpp
 @@ -4,11 +4,68 @@
@@ -444,7 +444,7 @@ index cc35442..4c879be 100644
      void to_json(json &j, const UserConfiguration &cfg) {
          j["graphicsAPI"] = cfg.graphicsAPI;
          j["resolution"] = cfg.resolution;
-@@ -29,6 +86,11 @@ namespace RT64 {
+@@ -29,6 +86,12 @@ namespace RT64 {
          j["hardwareResolve"] = cfg.hardwareResolve;
          j["idleWorkActive"] = cfg.idleWorkActive;
          j["developerMode"] = cfg.developerMode;
@@ -452,11 +452,12 @@ index cc35442..4c879be 100644
 +        j["stereoSeparation"] = cfg.stereoSeparation;
 +        j["stereoConvergence"] = cfg.stereoConvergence;
 +        j["stereoGamma"] = cfg.stereoGamma;
++        j["stereoHudDepth"] = cfg.stereoHudDepth;
 +        j["stereoAutoConvergence"] = cfg.stereoAutoConvergence;
      }
  
      void from_json(const json &j, UserConfiguration &cfg) {
-@@ -52,6 +114,11 @@ namespace RT64 {
+@@ -52,6 +115,12 @@ namespace RT64 {
          cfg.hardwareResolve = j.value("hardwareResolve", defaultCfg.hardwareResolve);
          cfg.idleWorkActive = j.value("idleWorkActive", defaultCfg.idleWorkActive);
          cfg.developerMode = j.value("developerMode", defaultCfg.developerMode);
@@ -464,11 +465,12 @@ index cc35442..4c879be 100644
 +        cfg.stereoSeparation = j.value("stereoSeparation", defaultCfg.stereoSeparation);
 +        cfg.stereoConvergence = j.value("stereoConvergence", defaultCfg.stereoConvergence);
 +        cfg.stereoGamma = j.value("stereoGamma", defaultCfg.stereoGamma);
++        cfg.stereoHudDepth = j.value("stereoHudDepth", defaultCfg.stereoHudDepth);
 +        cfg.stereoAutoConvergence = j.value("stereoAutoConvergence", defaultCfg.stereoAutoConvergence);
      }
  
      template <typename T>
-@@ -83,6 +150,20 @@ namespace RT64 {
+@@ -83,6 +152,21 @@ namespace RT64 {
          hardwareResolve = HardwareResolve::Automatic;
          idleWorkActive = true;
          developerMode = false;
@@ -476,6 +478,7 @@ index cc35442..4c879be 100644
 +        stereoSeparation = 0.05;
 +        stereoConvergence = 200.0;
 +        stereoGamma = 1.0;
++        stereoHudDepth = 0.0;
 +        // Off by default: it is a comfort aid, and on a calibrated 3D setup it fights
 +        // the user's own convergence (it keeps pulling it closer as scenes change).
 +        stereoAutoConvergence = false;
@@ -489,7 +492,7 @@ index cc35442..4c879be 100644
      }
  
      void UserConfiguration::validate() {
-@@ -97,11 +178,16 @@ namespace RT64 {
+@@ -97,11 +181,17 @@ namespace RT64 {
          clampEnum<RefreshRate>(refreshRate);
          clampEnum<InternalColorFormat>(internalColorFormat);
          clampEnum<HardwareResolve>(hardwareResolve);
@@ -502,12 +505,13 @@ index cc35442..4c879be 100644
 +        stereoSeparation = std::clamp<double>(stereoSeparation, 0.0, 0.5);
 +        stereoConvergence = std::clamp<double>(stereoConvergence, 0.1, 1000000.0);
 +        stereoGamma = std::clamp<double>(stereoGamma, 1.0, 2.0);
++        stereoHudDepth = std::clamp<double>(stereoHudDepth, -100.0, 100.0);
 +        apply_stereo_environment(*this);
  
          if (!isGraphicsAPISupported(graphicsAPI)) {
              graphicsAPI = GraphicsAPI::Automatic;
 diff --git a/src/common/rt64_user_configuration.h b/src/common/rt64_user_configuration.h
-index 4857f22..ff1380d 100644
+index 4857f22..26b8b0d 100644
 --- a/src/common/rt64_user_configuration.h
 +++ b/src/common/rt64_user_configuration.h
 @@ -83,6 +83,23 @@ namespace RT64 {
@@ -534,7 +538,7 @@ index 4857f22..ff1380d 100644
          GraphicsAPI graphicsAPI;
          Resolution resolution;
          DisplayBuffering displayBuffering;
-@@ -103,8 +120,28 @@ namespace RT64 {
+@@ -103,8 +120,32 @@ namespace RT64 {
          bool idleWorkActive;
          bool developerMode;
  
@@ -543,7 +547,7 @@ index 4857f22..ff1380d 100644
 +        // infinity, so the total background disparity is separation * screen width);
 +        // convergence is the distance (world units) of the zero-parallax plane. With
 +        // auto convergence on, the applied convergence only pulls closer than the
-+        // slider's value, following the scene's nearest significant depth each frame.
++        // slider's value, fitted to each scene's nearest significant depth when it starts.
 +        StereoMode stereoMode;
 +        double stereoSeparation;
 +        double stereoConvergence;
@@ -553,6 +557,10 @@ index 4857f22..ff1380d 100644
 +        // in^(1/stereoGamma), which brightens midtones and shadows while black stays black
 +        // and white stays white, so nothing clips.
 +        double stereoGamma;
++        // Conker: the HUD's depth in the stereo modes, as a percentage of the separation
++        // (-100..100): 0 keeps the 2D layer on the screen plane, positive values bring it
++        // out toward the viewer, negative values push it into the screen.
++        double stereoHudDepth;
 +
          UserConfiguration();
          void validate();
@@ -563,7 +571,7 @@ index 4857f22..ff1380d 100644
          uint32_t msaaSampleCount() const;
          static uint32_t msaaSampleCount(Antialiasing antialiasing);
          static bool isGraphicsAPISupported(GraphicsAPI graphicsAPI);
-@@ -170,6 +207,16 @@ namespace RT64 {
+@@ -170,6 +211,16 @@ namespace RT64 {
          { UserConfiguration::HardwareResolve::Automatic, "Automatic" }
      });
  
@@ -2343,7 +2351,7 @@ index 2970e71..201f657 100644
                  RenderWorkerExecution execution(ext.framebufferGraphicsWorker);
                  framebufferManager.uploadRAM(ext.framebufferGraphicsWorker, differentFbs.data(), differentFbs.size(), workload.fbChangePool, RDRAM, true, drawFbOperations, drawFbDiscards, ext.shaderLibrary);
 diff --git a/src/hle/rt64_workload_queue.cpp b/src/hle/rt64_workload_queue.cpp
-index 5a331aa..1da7660 100644
+index 5a331aa..9c64095 100644
 --- a/src/hle/rt64_workload_queue.cpp
 +++ b/src/hle/rt64_workload_queue.cpp
 @@ -4,6 +4,17 @@
@@ -2364,7 +2372,7 @@ index 5a331aa..1da7660 100644
  #include "common/rt64_thread.h"
  
  #include "rt64_present_queue.h"
-@@ -212,6 +223,20 @@ namespace RT64 {
+@@ -212,6 +223,21 @@ namespace RT64 {
          workloadConfig.downsampleMultiplier = ext.sharedResources->userConfig.downsampleMultiplier;
          ext.sharedResources->resolutionScale = workloadConfig.resolutionScale;
  
@@ -2374,6 +2382,7 @@ index 5a331aa..1da7660 100644
 +        workloadConfig.stereoMode = ext.sharedResources->userConfig.stereoMode;
 +        workloadConfig.stereoEnabled = (workloadConfig.stereoMode != UserConfiguration::StereoMode::Off) && (msaaSampleCount <= 1);
 +        workloadConfig.stereoSeparation = float(ext.sharedResources->userConfig.stereoSeparation);
++        workloadConfig.stereoHudDepth = float(ext.sharedResources->userConfig.stereoHudDepth / 100.0);
 +
 +        // Conker: auto-convergence. The manual slider stays the ceiling; auto only ever
 +        // pulls closer, fitted per scene (see the scene changes in the render loop).
@@ -2385,7 +2394,7 @@ index 5a331aa..1da7660 100644
          // Find the target refresh rate from the configuration.
          const auto refreshRate = ext.sharedResources->userConfig.refreshRate;
          switch (refreshRate) {
-@@ -292,7 +317,8 @@ namespace RT64 {
+@@ -292,7 +318,8 @@ namespace RT64 {
      void WorkloadQueue::threadRenderFrame(GameFrame &curFrame, const GameFrame &prevFrame, const WorkloadConfiguration &workloadConfig,
          const DebuggerRenderer &debuggerRenderer, const DebuggerCamera &debuggerCamera, float curFrameWeight, float prevFrameWeight,
          float deltaTimeMs, RenderTargetKey overrideTargetKey, int32_t overrideTargetFbPairIndex, RenderTarget *overrideTarget,
@@ -2395,7 +2404,7 @@ index 5a331aa..1da7660 100644
      {
  #   if ENABLE_HIGH_RESOLUTION_RENDERER
          std::scoped_lock<std::mutex> managerLock(ext.sharedResources->workloadMutex);
-@@ -301,9 +327,13 @@ namespace RT64 {
+@@ -301,9 +328,13 @@ namespace RT64 {
          const bool usingMSAA = (targetManager.multisampling.sampleCount > 1);
  
          rendererCPUProfiler.start();
@@ -2410,7 +2419,7 @@ index 5a331aa..1da7660 100644
          bool uploadProjections = false;
          if (processProjections) {
              ProjectionProcessor::ProcessParams projParams;
-@@ -314,12 +344,22 @@ namespace RT64 {
+@@ -314,12 +345,22 @@ namespace RT64 {
              projParams.curFrameWeight = curFrameWeight;
              projParams.prevFrameWeight = prevFrameWeight;
              projParams.aspectRatioScale = workloadConfig.aspectRatioScale;
@@ -2434,7 +2443,7 @@ index 5a331aa..1da7660 100644
          bool uploadTransforms = false;
          if (processTransforms) {
              TransformProcessor::ProcessParams transformParams;
-@@ -335,7 +375,7 @@ namespace RT64 {
+@@ -335,7 +376,7 @@ namespace RT64 {
          }
  
          bool uploadTiles = false;
@@ -2443,7 +2452,7 @@ index 5a331aa..1da7660 100644
              TileProcessor::ProcessParams tileParams;
              tileParams.worker = ext.workloadGraphicsWorker;
              tileParams.workloadQueue = this;
-@@ -349,7 +389,7 @@ namespace RT64 {
+@@ -349,7 +390,7 @@ namespace RT64 {
          }
  
          bool uploadLookAts = false;
@@ -2452,7 +2461,7 @@ index 5a331aa..1da7660 100644
              LookAtProcessor::ProcessParams lookAtParams;
              lookAtParams.worker = ext.workloadGraphicsWorker;
              lookAtParams.workloadQueue = this;
-@@ -449,6 +489,15 @@ namespace RT64 {
+@@ -449,6 +490,15 @@ namespace RT64 {
                          colorFb = &fbManager.get(colorImg.address, colorImg.siz, nativeColorWidth, nativeColorHeight);
                      }
  
@@ -2468,7 +2477,7 @@ index 5a331aa..1da7660 100644
                      if (colorFb != nullptr) {
                          fbKey.colorTargetKey = RenderTargetKey(colorFb->addressStart, colorFb->width, colorFb->siz, Framebuffer::Type::Color);
                          colorTarget = &targetManager.get(fbKey.colorTargetKey);
-@@ -508,6 +557,16 @@ namespace RT64 {
+@@ -508,6 +558,16 @@ namespace RT64 {
              colorDepthPairs.clear();
  
              const uint32_t fbPairCount = (debuggerRenderer.framebufferIndex >= 0) ? (debuggerRenderer.framebufferIndex + 1) : workload.fbPairCount;
@@ -2485,7 +2494,7 @@ index 5a331aa..1da7660 100644
              for (uint32_t f = 0; f < fbPairCount; f++) {
                  const FramebufferPair &fbPair = workload.fbPairs[f];
  #           if RT_ENABLED
-@@ -538,9 +597,19 @@ namespace RT64 {
+@@ -538,9 +598,19 @@ namespace RT64 {
                          depthFb->nativeTarget.resetBufferHistory();
                      }
  
@@ -2505,7 +2514,7 @@ index 5a331aa..1da7660 100644
                      }
  
                      // Set up the dummy target used for rendering the depth if no depth framebuffer is active.
-@@ -566,6 +635,9 @@ namespace RT64 {
+@@ -566,6 +636,9 @@ namespace RT64 {
                          if (depthTarget->resize(ext.workloadGraphicsWorker, rtWidth, rtHeight)) {
                              resizedTargets.emplace(depthTarget);
                              depthFb->readHeight = 0;
@@ -2515,7 +2524,7 @@ index 5a331aa..1da7660 100644
                          }
                      }
                  }
-@@ -577,6 +649,10 @@ namespace RT64 {
+@@ -577,6 +650,10 @@ namespace RT64 {
              // Make sure all depth targets are at least bigger than their corresponding color targets.
              for (auto colorDepthPair : colorDepthPairs) {
                  if (colorDepthPair.second->resize(ext.workloadGraphicsWorker, colorDepthPair.first->width, colorDepthPair.first->height)) {
@@ -2526,7 +2535,7 @@ index 5a331aa..1da7660 100644
                      resizedTargets.emplace(colorDepthPair.second);
                  }
              }
-@@ -612,9 +688,22 @@ namespace RT64 {
+@@ -612,9 +689,22 @@ namespace RT64 {
              }
  #       endif
  
@@ -2549,7 +2558,7 @@ index 5a331aa..1da7660 100644
                      RenderFramebufferStorage &fbStorage = renderFramebufferManager->get(fbKey, colorTarget, (depthTarget != nullptr) ? depthTarget : dummyDepthTarget.get());
                      FramebufferRenderer::DrawParams drawParams;
                      drawParams.worker = ext.workloadGraphicsWorker;
-@@ -639,6 +728,13 @@ namespace RT64 {
+@@ -639,6 +729,17 @@ namespace RT64 {
                      drawParams.postBlendNoise = workloadConfig.postBlendNoise;
                      drawParams.postBlendNoiseNegative = workloadConfig.postBlendNoiseNegative;
                      drawParams.maxGameCall = std::min(gameCallCountMax - gameCallCursor, fbPair.gameCallCount);
@@ -2559,11 +2568,15 @@ index 5a331aa..1da7660 100644
 +            // Conker: the auto-convergence loop's focus depth, for the rectangles of
 +            // scripted scenes (see DrawParams::stereoFocusDepth).
 +            drawParams.stereoFocusDepth = workloadConfig.stereoFocusDepth;
++            // Conker: HUD depth, for the pairs drawing the image that's displayed (the
++            // eye target's color image) only: offscreen buffers keep their 2D in place.
++            drawParams.stereoHudDepth = workloadConfig.stereoHudDepth;
++            drawParams.stereoHudPair = !overrideTargetKey.isEmpty() && (fbPair.colorImage.address == overrideTargetKey.address);
 +            drawParams.stereoEye = stereoEye;
                      framebufferRenderer->addFramebuffer(drawParams);
                  }
                  
-@@ -709,6 +805,12 @@ namespace RT64 {
+@@ -709,6 +810,12 @@ namespace RT64 {
              for (uint32_t f = 0; f < fbPairCount; f++) {
                  const FramebufferPair &fbPair = workload.fbPairs[f];
                  bool validTargets = getTargetsFromPair(f);
@@ -2576,7 +2589,7 @@ index 5a331aa..1da7660 100644
                  fbManager.recordOperations(ext.workloadGraphicsWorker, &workload.fbChangePool, &workload.fbStorage, ext.shaderLibrary, ext.textureCache,
                      fbPair.startFbOperations, targetManager, fixedResScale, f, workload.submissionFrame);
  
-@@ -738,6 +840,11 @@ namespace RT64 {
+@@ -738,6 +845,11 @@ namespace RT64 {
  
                          if (colorFb->height > colorFb->readHeight) {
                              uint32_t readRowCount = colorFb->height - colorFb->readHeight;
@@ -2588,7 +2601,7 @@ index 5a331aa..1da7660 100644
                              FramebufferChange *colorFbChange = colorFb->readChangeFromStorage(ext.workloadGraphicsWorker, workload.fbStorage, scratchFbChangePool,
                                  Framebuffer::Type::Color, colorImg.fmt, f, colorFb->readHeight, readRowCount, ext.shaderLibrary);
  
-@@ -756,10 +863,20 @@ namespace RT64 {
+@@ -756,10 +868,20 @@ namespace RT64 {
                          depthFbTypeChanged = (depthFb->lastWriteType == Framebuffer::Type::Color);
  
                          bool imgFormatChanged = (colorFb == nullptr) ? colorImg.formatChanged : depthImg.formatChanged;
@@ -2609,7 +2622,7 @@ index 5a331aa..1da7660 100644
                              RenderTargetKey otherDepthTargetKey(depthFb->addressStart, depthFb->width, depthFb->siz, depthFb->lastWriteType);
                              RenderTarget &otherDepthTarget = targetManager.get(otherDepthTargetKey);
                              if (!otherDepthTarget.isEmpty()) {
-@@ -777,6 +894,10 @@ namespace RT64 {
+@@ -777,6 +899,10 @@ namespace RT64 {
  
                          if (depthFb->height > depthFb->readHeight) {
                              uint32_t readRowCount = depthFb->height - depthFb->readHeight;
@@ -2620,7 +2633,7 @@ index 5a331aa..1da7660 100644
                              FramebufferChange *depthFbChange = depthFb->readChangeFromStorage(ext.workloadGraphicsWorker, workload.fbStorage, scratchFbChangePool, Framebuffer::Type::Depth,
                                  G_IM_FMT_DEPTH, f, depthFb->readHeight, readRowCount, ext.shaderLibrary);
  
-@@ -837,17 +958,42 @@ namespace RT64 {
+@@ -837,17 +963,42 @@ namespace RT64 {
                      fbPair.endFbOperations, targetManager, fixedResScale, f, workload.submissionFrame);
              }
  
@@ -2663,7 +2676,7 @@ index 5a331aa..1da7660 100644
  
              // Indicate to the texture cache it's safe to delete the textures if no locks are active.
              ext.textureCache->decrementLock();
-@@ -858,12 +1004,206 @@ namespace RT64 {
+@@ -858,12 +1009,206 @@ namespace RT64 {
          }
  
          framebufferRenderer->advanceFrame(workloadConfig.raytracingEnabled);
@@ -2870,7 +2883,7 @@ index 5a331aa..1da7660 100644
      void WorkloadQueue::threadAdvanceBarrier() {
          std::scoped_lock<std::mutex> cursorLock(cursorMutex);
          barrierCursor = (barrierCursor + 1) % workloads.size();
-@@ -926,6 +1266,43 @@ namespace RT64 {
+@@ -926,6 +1271,43 @@ namespace RT64 {
                  uint32_t workloadIndex = processCursor;
                  curFrame.set(*this, &workloadIndex, 1);
  
@@ -2914,7 +2927,7 @@ index 5a331aa..1da7660 100644
                  // Detect the color image to interpolate for this workload.
                  RenderTargetKey interpolationTargetKey;
                  int32_t interpolationTargetFbPairIndex = -1;
-@@ -1030,13 +1407,35 @@ namespace RT64 {
+@@ -1030,13 +1412,35 @@ namespace RT64 {
                  // If the same set of counters is used, we wait until the presentation of its targets is finished so the targets are available to use. Waiting is ignored
                  // if the frame counter has never presented anything yet, as it'll only be a valid value if the previous present event actually did something.
                  else if (generateInterpolatedFrames) {
@@ -2950,7 +2963,7 @@ index 5a331aa..1da7660 100644
                  curFrameCounters.skipped = false;
                  curFrameCounters.presented = 0;
                  curFrameCounters.available = 0;
-@@ -1046,7 +1445,10 @@ namespace RT64 {
+@@ -1046,7 +1450,10 @@ namespace RT64 {
                  auto &interpolatedTargets = ext.sharedResources->interpolatedColorTargets;
                  const bool usingMSAA = (ext.sharedResources->renderTargetManager.multisampling.sampleCount > 1);
                  const bool usesHDR = ext.sharedResources->renderTargetManager.usesHDR;
@@ -2962,7 +2975,7 @@ index 5a331aa..1da7660 100644
                  if ((requiredFrames > 0) && (interpolatedTargets.size() < requiredFrames)) {
                      uint32_t previousSize = uint32_t(interpolatedTargets.size());
                      interpolatedTargets.resize(requiredFrames);
-@@ -1061,6 +1463,7 @@ namespace RT64 {
+@@ -1061,6 +1468,7 @@ namespace RT64 {
                  const int64_t maxTimePerFrameMicro = adjustedTimeWindowMicro / displayFrames;
                  bool skippedFrames = false;
                  bool skipWorkloadNow = false;
@@ -2970,7 +2983,7 @@ index 5a331aa..1da7660 100644
                  uint32_t targetIndex = 0;
                  uint32_t framesRendered = 0;
                  int64_t renderTimeTotalMicro = 0;
-@@ -1073,6 +1476,7 @@ namespace RT64 {
+@@ -1073,6 +1481,7 @@ namespace RT64 {
                          if ((currentTimeMicro > expectedTimeMicro) || ((currentTimeMicro + measuredFrameMicro) > adjustedTimeWindowMicro)) {
                              displayTicks += workload.viOriginalRate;
                              skippedFrames = true;
@@ -2978,7 +2991,7 @@ index 5a331aa..1da7660 100644
                              continue;
                          }
                      }
-@@ -1084,8 +1488,9 @@ namespace RT64 {
+@@ -1084,8 +1493,9 @@ namespace RT64 {
                          displayTicks += workload.viOriginalRate;
                          curFrameWeight = std::clamp((workloadConfig.targetRate + displayTicks - logicalTicks) / float(workloadConfig.targetRate), 0.0f, 1.0f);
  
@@ -2990,7 +3003,7 @@ index 5a331aa..1da7660 100644
                              overrideTarget = interpolatedTargets[targetIndex].get();
                              overrideModifier = (targetIndex + 1);
  
-@@ -1117,8 +1522,58 @@ namespace RT64 {
+@@ -1117,8 +1527,58 @@ namespace RT64 {
                      }
  
                      int64_t renderTimeMicro = workloadTimer.elapsedMicroseconds();
@@ -3051,7 +3064,7 @@ index 5a331aa..1da7660 100644
  
                      // Add total time the frame took to render.
                      renderTimeTotalMicro += workloadTimer.elapsedMicroseconds() - renderTimeMicro;
-@@ -1129,7 +1584,7 @@ namespace RT64 {
+@@ -1129,7 +1589,7 @@ namespace RT64 {
                      }
  
                      // For every additional frame, we increase the frames available and notify the present queue.
@@ -3060,7 +3073,7 @@ index 5a331aa..1da7660 100644
                          {
                              std::scoped_lock<std::mutex> cursorLock(cursorMutex);
                              skipWorkloadNow = ((frame + 1) < displayFrames) && (writeCursor != threadCursor);
-@@ -1152,6 +1607,10 @@ namespace RT64 {
+@@ -1152,6 +1612,10 @@ namespace RT64 {
                      framesRendered++;
                  }
  
@@ -3072,7 +3085,7 @@ index 5a331aa..1da7660 100644
                  if (skippedFrames && !skipWorkloadNow) {
                      {
 diff --git a/src/hle/rt64_workload_queue.h b/src/hle/rt64_workload_queue.h
-index bde2f03..a570e65 100644
+index bde2f03..4ba8e8c 100644
 --- a/src/hle/rt64_workload_queue.h
 +++ b/src/hle/rt64_workload_queue.h
 @@ -12,6 +12,7 @@
@@ -3083,7 +3096,7 @@ index bde2f03..a570e65 100644
  #include "render/rt64_tile_processor.h"
  #include "render/rt64_look_at_processor.h"
  #include "render/rt64_transform_processor.h"
-@@ -58,6 +59,20 @@ namespace RT64 {
+@@ -58,6 +59,23 @@ namespace RT64 {
              uint32_t targetRate = 0;
              bool postBlendNoise = false;
              bool postBlendNoiseNegative = false;
@@ -3097,6 +3110,9 @@ index bde2f03..a570e65 100644
 +            // Both are latched once per display frame, so the two eyes of a pair always
 +            // share them.
 +            float stereoFocusDepth = 0.0f;
++            // Conker: the HUD's depth as a fraction of the separation (see
++            // UserConfiguration::stereoHudDepth).
++            float stereoHudDepth = 0.0f;
 +            // Conker: auto-convergence. The world camera cut this game frame (see
 +            // ProjectionProcessor::ProcessParams::stereoCameraCut).
 +            bool stereoCameraCut = false;
@@ -3104,7 +3120,7 @@ index bde2f03..a570e65 100644
          };
  
          External ext;
-@@ -92,6 +107,25 @@ namespace RT64 {
+@@ -92,6 +110,25 @@ namespace RT64 {
          std::unique_ptr<VertexProcessor> vertexProcessor;
          std::unique_ptr<RenderTarget> dummyDepthTarget;
          std::unique_ptr<RenderQueryPool> queryPool;
@@ -3130,7 +3146,7 @@ index bde2f03..a570e65 100644
          FramebufferChangePool scratchFbChangePool;
          ProfilingTimer rendererCPUProfiler = ProfilingTimer(120);
          ProfilingTimer rendererGPUProfiler = ProfilingTimer(120);
-@@ -116,7 +150,14 @@ namespace RT64 {
+@@ -116,7 +153,14 @@ namespace RT64 {
          void threadRenderFrame(GameFrame &curFrame, const GameFrame &prevFrame, const WorkloadConfiguration &workloadConfig,
              const DebuggerRenderer &debuggerRenderer, const DebuggerCamera &debuggerCamera, float curFrameWeight, float prevFrameWeight,
              float deltaTimeMs, RenderTargetKey overrideTargetKey, int32_t overrideTargetFbPairIndex, RenderTarget *overrideTarget,
@@ -3170,7 +3186,7 @@ index 69a82ac..31f6122 100644
              builder.end();
  
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..1368c7b 100644
+index 9fae0d4..9dc3a80 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -7,6 +7,7 @@
@@ -3217,7 +3233,23 @@ index 9fae0d4..1368c7b 100644
                  if (useWideViewport) {
                      projInvRatioScale = 1.0f;
                  }
-@@ -1625,6 +1644,7 @@ namespace RT64 {
+@@ -1506,6 +1525,15 @@ namespace RT64 {
+                 viewportClip = convertViewportRect(viewport.rect(viewportClipRatios), p.resolutionScale, p.fbWidth, projInvRatioScale, extOriginPercentage, 0.0f, viewportOrigin, viewportOrigin);
+             }
+ 
++            // Conker: HUD depth (see DrawParams::stereoHudDepth). Eye 0 shifts right for
++            // content in front of the screen, as the scene's projections do. The shift is
++            // added per call to the projection's screen offset, kept here.
++            const bool hudProjection = p.stereoEnabled && p.stereoHudPair && (p.stereoHudDepth != 0.0f) &&
++                ((proj.type == Projection::Type::Rectangle) || (proj.type == Projection::Type::Orthographic));
++            const float hudParallaxNdc = ((p.stereoEye == 0) ? 1.0f : -1.0f) * p.stereoSeparation * p.stereoHudDepth;
++            const interop::float2 projScreenOffset = triangles.screenOffset;
++            const FixedRect &hudFrame = fbPair.scissorRect.isNull() ? proj.scissorRect : fbPair.scissorRect;
++
+             for (uint32_t d = 0; (d < proj.gameCallCount) && (globalCallIndex < p.maxGameCall); d++) {
+                 const GameCall &call = proj.gameCalls[d];
+                 renderIndices.instanceIndex = call.callDesc.callIndex;
+@@ -1625,6 +1653,7 @@ namespace RT64 {
  
                          float invRatioScale = 1.0f / aspectRatioScale;
                          float horizontalMisalignment = 0.0f;
@@ -3225,7 +3257,7 @@ index 9fae0d4..1368c7b 100644
                          switch (proj.type) {
                          case Projection::Type::Perspective:
                          case Projection::Type::Orthographic: {
-@@ -1645,14 +1665,83 @@ namespace RT64 {
+@@ -1645,14 +1674,83 @@ namespace RT64 {
                              // The call's scissor spans the whole width of the framebuffer pair scissor. The rect must not be using extended origins.
                              const bool regularOrigins = (call.callDesc.rectLeftOrigin == G_EX_ORIGIN_NONE) && (call.callDesc.rectRightOrigin == G_EX_ORIGIN_NONE);
                              const bool coversScissorWidth = regularOrigins && (call.callDesc.rect.ulx <= fbPair.scissorRect.ulx) && (call.callDesc.rect.lrx >= fbPair.scissorRect.lrx);
@@ -3310,11 +3342,46 @@ index 9fae0d4..1368c7b 100644
                              triangles.screenScale = { viewportRect.width / framebuffer.viewport.width, viewportRect.height / framebuffer.viewport.height };
                              triangles.screenOffset.x = halfPixelOffset.x + ((viewportRect.x + viewportRect.width / 2.0f) - halfViewportSize.x) / halfViewportSize.x;
                              triangles.screenOffset.y = halfPixelOffset.y + (halfViewportSize.y - (viewportRect.y + viewportRect.height / 2.0f)) / halfViewportSize.y;
-@@ -1676,7 +1765,12 @@ namespace RT64 {
+@@ -1676,7 +1774,47 @@ namespace RT64 {
                              break;
                          }
  
 -                        triangles.scissor = convertFixedRect(call.callDesc.scissorRect, p.resolutionScale, p.fbWidth, invRatioScale, extOriginPercentage, int32_t(horizontalMisalignment), call.callDesc.scissorLeftOrigin, call.callDesc.scissorRightOrigin);
++                        // Conker: HUD depth. Rectangles set their own screen offset above;
++                        // orthographic calls start from the projection's every time.
++                        if (hudProjection) {
++                            bool hudCall = false;
++                            int32_t hudLeft = 0, hudRight = 0;
++                            if (proj.type == Projection::Type::Rectangle) {
++                                // A rect with a sprite depth already has the scene's parallax.
++                                hudCall = (call.callDesc.rectStereoInvDepth <= 0.0f);
++                                hudLeft = call.callDesc.rect.ulx;
++                                hudRight = call.callDesc.rect.lrx;
++                            }
++                            else {
++                                triangles.screenOffset = projScreenOffset;
++                                // The call's horizontal extent on screen, from the RSP's screen
++                                // positions (N64 pixels; the frame's rects are in quarters).
++                                const uint32_t indexCount = call.callDesc.triangleCount * 3;
++                                float minX = FLT_MAX, maxX = -FLT_MAX;
++                                for (uint32_t i = 0; i < indexCount; i++) {
++                                    const uint32_t vertexIndex = drawData.faceIndices[call.meshDesc.faceIndicesStart + i];
++                                    const float x = drawData.posScreen[vertexIndex][0];
++                                    minX = std::min(minX, x);
++                                    maxX = std::max(maxX, x);
++                                }
++
++                                hudCall = (indexCount > 0) && std::isfinite(minX) && std::isfinite(maxX);
++                                hudLeft = int32_t(std::floor(minX * 4.0f));
++                                hudRight = int32_t(std::ceil(maxX * 4.0f));
++                            }
++
++                            const bool touchesEdge = (hudLeft <= hudFrame.ulx + CoversWidthSlack) || (hudRight >= hudFrame.lrx - CoversWidthSlack);
++                            if (hudCall && !touchesEdge) {
++                                triangles.screenOffset.x += hudParallaxNdc;
++                            }
++                        }
++
 +                        if (wideRectScissor) {
 +                            triangles.scissor = convertFixedRect(call.callDesc.scissorRect, p.resolutionScale, p.fbWidth, 1.0f, extOriginPercentage, 0, call.callDesc.scissorLeftOrigin, call.callDesc.scissorRightOrigin);
 +                        }
@@ -3325,10 +3392,10 @@ index 9fae0d4..1368c7b 100644
                          bool usesViewport = (proj.type == Projection::Type::Perspective) || (proj.type == Projection::Type::Orthographic);
                          if (usesViewport) {
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..02ece25 100644
+index 3add9c3..7b5a8e8 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
-@@ -147,6 +147,15 @@ namespace RT64 {
+@@ -147,6 +147,23 @@ namespace RT64 {
              bool postBlendNoise;
              bool postBlendNoiseNegative;
              uint32_t maxGameCall;
@@ -3340,6 +3407,14 @@ index 3add9c3..02ece25 100644
 +            // Conker: the auto-convergence loop's focus distance (world units, 0 when it
 +            // has none). Rectangles of scripted scenes use it instead of their own depth.
 +            float stereoFocusDepth = 0.0f;
++            // Conker: HUD depth. The 2D layer (rectangles without a sprite depth and
++            // orthographic triangles) of the displayed image's pairs (stereoHudPair) is
++            // given a fixed parallax of stereoHudDepth times the separation: positive
++            // pops out toward the viewer, negative recedes. Draws touching the left or
++            // right edge of the frame (fades, letterbox bars, wipes, full-screen copies)
++            // stay on the screen plane: shifted, they would leave a gap at the edge.
++            float stereoHudDepth = 0.0f;
++            bool stereoHudPair = false;
 +            int32_t stereoEye = 0;
          };
  

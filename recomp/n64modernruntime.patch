@@ -207,7 +207,7 @@ index 5593172..70d4706 100644
  if (WIN32)
      add_compile_definitions(NOMINMAX)
 diff --git a/ultramodern/include/ultramodern/config.hpp b/ultramodern/include/ultramodern/config.hpp
-index 2f22456..264c78f 100644
+index 2f22456..a5e5da0 100644
 --- a/ultramodern/include/ultramodern/config.hpp
 +++ b/ultramodern/include/ultramodern/config.hpp
 @@ -57,6 +57,19 @@ namespace ultramodern {
@@ -230,7 +230,7 @@ index 2f22456..264c78f 100644
          enum class PresentationMode {
              Console,
              SkipBuffering,
-@@ -76,6 +89,15 @@ namespace ultramodern {
+@@ -76,6 +89,19 @@ namespace ultramodern {
              HighPrecisionFramebuffer hpfb_option;
              int rr_manual_value;
              int ds_option;
@@ -243,6 +243,10 @@ index 2f22456..264c78f 100644
 +            bool stereo_auto_convergence_option = false;
 +            // The gamma lift the stereo modes present with (1 = none): out = in^(1/gamma).
 +            double stereo_gamma_option = 1.0;
++            // The HUD's depth in the stereo modes, as a percentage of the separation: 0 keeps
++            // it on the screen plane, positive values bring it out toward the viewer,
++            // negative values push it into the screen.
++            double stereo_hud_depth_option = 0.0;
  
              virtual ~GraphicsConfig() = default;
  
