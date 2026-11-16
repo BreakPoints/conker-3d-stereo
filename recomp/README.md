@@ -654,6 +654,19 @@ rectangle per eye by `separation * (1 - convergence / z)`, the same parallax the
 feature off to compare, and the shift is clamped so a sprite near the camera
 plane can't fly off.
 
+**HUD Depth** (Graphics tab, -100% to 100%, 0 by default; Ctrl or Alt + Page
+Up/Page Down while playing) takes that 2D layer off the screen plane. It is a
+fixed parallax of `HUD Depth x separation` per eye: positive brings the HUD out
+toward the viewer, negative pushes it in, and at 100% it stands as far in front of
+the screen as the background is behind it. It applies to rectangles without a
+sprite depth and to orthographic triangles, in the pairs drawing the displayed
+image only (`DrawParams::stereoHudDepth`, `rt64_framebuffer_renderer.cpp`).
+Draws touching the left or right edge of the frame stay on the screen plane - the
+fades, letterbox bars, the circle wipe's black and full-screen copies, which
+would leave a gap at the edge if shifted. Triangles are measured with the RSP's
+screen positions (`posScreen`). Untagged perspective projections (3D items drawn
+over the HUD, if any) aren't moved.
+
 The circle wipe (spawns, deaths, level changes: `func_15180580`,
 `host/src/widescreen.cpp`) is a screen-space overlay, but its black and the
 circle's quarters are drawn with the depth of what the played camera is looking

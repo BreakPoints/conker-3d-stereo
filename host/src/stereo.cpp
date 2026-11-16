@@ -22,8 +22,9 @@
 // The ID must match conkerStereoWorldMatrixId in tools/rt64
 // (src/render/rt64_projection_processor.cpp).
 //
-// Live stereo knobs: Ctrl/Alt + arrows slide the separation and the convergence
-// without the settings overlay (see poll_stereo_hotkeys). The changes go through
+// Live stereo knobs: Ctrl/Alt + arrows slide the separation and the convergence, and
+// Ctrl/Alt + Page Up/Page Down the HUD depth, without the settings overlay (see
+// poll_stereo_hotkeys). The changes go through
 // ultramodern's graphics config, the same path the overlay's sliders use, so the
 // renderer picks them up on the next frame. The sliders themselves do not show
 // these values: opening the overlay and touching any of them re-applies the
@@ -86,8 +87,9 @@ namespace {
     }
 
     // Stereo knobs without the settings overlay: Ctrl + arrows is the fine step
-    // (0.5% separation, 5 units convergence), Alt the coarse one (2.5%, 25), and
-    // the current values print as [stereo]. Polled from the camera setup, which runs
+    // (0.5% separation, 5 units convergence), Alt the coarse one (2.5%, 25); Page
+    // Up/Page Down move the HUD depth (5% / 25% of the separation, up brings it out).
+    // The current values print as [stereo]. Polled from the camera setup, which runs
     // every gameplay frame; a held combo repeats after a short delay.
     void poll_stereo_hotkeys() {
         const Uint8* keys = SDL_GetKeyboardState(nullptr);
@@ -97,20 +99,23 @@ namespace {
 
         const bool ctrl = (keys[SDL_SCANCODE_LCTRL] != 0) || (keys[SDL_SCANCODE_RCTRL] != 0);
         const bool alt = (keys[SDL_SCANCODE_LALT] != 0) || (keys[SDL_SCANCODE_RALT] != 0);
-        const bool down[4] = {
+        constexpr int keyCount = 6;
+        const bool down[keyCount] = {
             keys[SDL_SCANCODE_LEFT] != 0,
             keys[SDL_SCANCODE_RIGHT] != 0,
             keys[SDL_SCANCODE_UP] != 0,
-            keys[SDL_SCANCODE_DOWN] != 0
+            keys[SDL_SCANCODE_DOWN] != 0,
+            keys[SDL_SCANCODE_PAGEUP] != 0,
+            keys[SDL_SCANCODE_PAGEDOWN] != 0
         };
 
-        static bool prevDown[4] = { false, false, false, false };
-        static Uint32 nextRepeat[4] = { 0, 0, 0, 0 };
+        static bool prevDown[keyCount] = {};
+        static Uint32 nextRepeat[keyCount] = {};
 
         const Uint32 now = SDL_GetTicks();
-        bool apply[4] = { false, false, false, false };
+        bool apply[keyCount] = {};
         bool any = false;
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < keyCount; i++) {
             // The subtraction wraps, so this also holds across SDL_GetTicks' rollover.
             if (down[i] && (ctrl || alt) && (!prevDown[i] || (int32_t(now - nextRepeat[i]) >= 0))) {
                 nextRepeat[i] = now + (prevDown[i] ? 80 : 400);
@@ -128,6 +133,7 @@ namespace {
         ultramodern::renderer::GraphicsConfig config = ultramodern::renderer::get_graphics_config();
         const double separationStep = alt ? 0.025 : 0.005;
         const double convergenceStep = alt ? 25.0 : 5.0;
+        const double hudDepthStep = alt ? 25.0 : 5.0;
         if (apply[0]) {
             config.stereo_separation_option -= separationStep;
         }
@@ -144,11 +150,20 @@ namespace {
             config.stereo_convergence_option -= convergenceStep;
         }
 
+        if (apply[4]) {
+            config.stereo_hud_depth_option += hudDepthStep;
+        }
+
+        if (apply[5]) {
+            config.stereo_hud_depth_option -= hudDepthStep;
+        }
+
         config.stereo_separation_option = std::clamp(config.stereo_separation_option, 0.0, 0.40);
         config.stereo_convergence_option = std::clamp(config.stereo_convergence_option, 1.0, 2000.0);
+        config.stereo_hud_depth_option = std::clamp(config.stereo_hud_depth_option, -100.0, 100.0);
         ultramodern::renderer::set_graphics_config(config);
-        std::fprintf(stderr, "[stereo] separation %.1f%% convergence %.0f\n",
-            config.stereo_separation_option * 100.0, config.stereo_convergence_option);
+        std::fprintf(stderr, "[stereo] separation %.1f%% convergence %.0f hud %.0f%%\n",
+            config.stereo_separation_option * 100.0, config.stereo_convergence_option, config.stereo_hud_depth_option);
     }
 }
 

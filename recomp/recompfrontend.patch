@@ -867,10 +867,10 @@ index c89956e..4699451 100644
              if (controllers == config_json.end() || !controllers->is_array()) {
                  return false;
 diff --git a/recompui/include/recompui/config.h b/recompui/include/recompui/config.h
-index 38b84f5..9041c51 100644
+index 38b84f5..a760251 100644
 --- a/recompui/include/recompui/config.h
 +++ b/recompui/include/recompui/config.h
-@@ -61,6 +61,15 @@ namespace recompui {
+@@ -61,6 +61,16 @@ namespace recompui {
                  inline const std::string hpfb_option = "hpfb_option";
                  inline const std::string rr_manual_value = "rr_manual_value";
                  inline const std::string ds_option = "ds_option";
@@ -883,10 +883,11 @@ index 38b84f5..9041c51 100644
 +                inline const std::string stereo_convergence_option = "stereo_convergence_option";
 +                inline const std::string stereo_auto_convergence_option = "stereo_auto_convergence_option";
 +                inline const std::string stereo_gamma_option = "stereo_gamma_option";
++                inline const std::string stereo_hud_depth_option = "stereo_hud_depth_option";
              }
      
              void update_msaa_supported(bool supported);
-@@ -145,6 +154,10 @@ namespace recompui {
+@@ -145,6 +155,10 @@ namespace recompui {
  
          // Get any added config by ID.
          recomp::config::Config &get_config(const std::string &id);
@@ -1861,7 +1862,7 @@ index 296ce0e..193466d 100644
      
      double general::get_joystick_deadzone() {
 diff --git a/recompui/src/config/ui_config_tab_graphics.cpp b/recompui/src/config/ui_config_tab_graphics.cpp
-index 4fdf81f..8ab25fe 100644
+index 4fdf81f..2c68aa7 100644
 --- a/recompui/src/config/ui_config_tab_graphics.cpp
 +++ b/recompui/src/config/ui_config_tab_graphics.cpp
 @@ -95,6 +95,19 @@ namespace recompui {
@@ -1884,7 +1885,7 @@ index 4fdf81f..8ab25fe 100644
          static const std::string get_downsampling_details(ultramodern::renderer::Resolution res_option, DownsamplingOption ds_option) {
              switch (res_option) {
                  default:
-@@ -177,6 +190,28 @@ namespace recompui {
+@@ -177,6 +190,29 @@ namespace recompui {
  
              new_config.ds_option = get_graphics_enum_value<int>(graphics::options::ds_option);
  
@@ -1909,11 +1910,12 @@ index 4fdf81f..8ab25fe 100644
 +            new_config.stereo_convergence_option = get_graphics_number_value<double>(graphics::options::stereo_convergence_option);
 +            new_config.stereo_auto_convergence_option = get_graphics_bool_value(graphics::options::stereo_auto_convergence_option);
 +            new_config.stereo_gamma_option = get_graphics_number_value<double>(graphics::options::stereo_gamma_option);
++            new_config.stereo_hud_depth_option = get_graphics_number_value<double>(graphics::options::stereo_hud_depth_option);
 +
              ultramodern::renderer::set_graphics_config(new_config);
          }
  
-@@ -359,6 +394,102 @@ namespace recompui {
+@@ -359,6 +395,116 @@ namespace recompui {
                  true
              );
  
@@ -2008,6 +2010,20 @@ index 4fdf81f..8ab25fe 100644
 +            {
 +                config.add_option_hidden_dependency(
 +                    graphics::options::stereo_gamma_option,
++                    graphics::options::stereo_mode_option,
++                    ultramodern::renderer::StereoMode::Off
++                );
++            }
++
++            config.add_number_option(
++                graphics::options::stereo_hud_depth_option,
++                "HUD Depth",
++                "Moves the HUD and the game's other 2D overlays (counters, text, the game's own menus) off the screen plane in the 3D modes. Positive values bring them out toward you, negative values push them into the screen, and 0 keeps them on it. At 100% they stand as far in front of the screen as the background is behind it. Fades and other full-screen effects stay on the screen. Ctrl or Alt + Page Up/Page Down also adjust it while playing.",
++                -100.0, 100.0, 5.0, 0, true, 0.0
++            );
++            {
++                config.add_option_hidden_dependency(
++                    graphics::options::stereo_hud_depth_option,
 +                    graphics::options::stereo_mode_option,
 +                    ultramodern::renderer::StereoMode::Off
 +                );
@@ -2140,7 +2156,7 @@ index 2c5dc52..9b175f4 100644
  }
  
 diff --git a/recompui/src/renderer/rt64_render_context.cpp b/recompui/src/renderer/rt64_render_context.cpp
-index a7954c7..c0a55d9 100644
+index a7954c7..bf152db 100644
 --- a/recompui/src/renderer/rt64_render_context.cpp
 +++ b/recompui/src/renderer/rt64_render_context.cpp
 @@ -138,6 +138,28 @@ RT64::EnhancementConfiguration::Presentation::Mode to_rt64(ultramodern::renderer
@@ -2172,7 +2188,7 @@ index a7954c7..c0a55d9 100644
  void set_application_user_config(RT64::Application* application, const ultramodern::renderer::GraphicsConfig& config) {
      switch (config.res_option) {
          default:
-@@ -177,6 +199,13 @@ void set_application_user_config(RT64::Application* application, const ultramode
+@@ -177,6 +199,14 @@ void set_application_user_config(RT64::Application* application, const ultramode
      application->userConfig.refreshRateTarget = config.rr_manual_value;
      application->userConfig.internalColorFormat = to_rt64(config.hpfb_option);
      application->userConfig.displayBuffering = RT64::UserConfiguration::DisplayBuffering::Triple;
@@ -2183,10 +2199,11 @@ index a7954c7..c0a55d9 100644
 +        application->userConfig.stereoConvergence = config.stereo_convergence_option;
 +        application->userConfig.stereoAutoConvergence = config.stereo_auto_convergence_option;
 +        application->userConfig.stereoGamma = config.stereo_gamma_option;
++        application->userConfig.stereoHudDepth = config.stereo_hud_depth_option;
  }
  
  ultramodern::renderer::SetupResult map_setup_result(RT64::Application::SetupResult rt64_result) {
-@@ -360,6 +389,10 @@ void renderer::RT64Context::update_screen() {
+@@ -360,6 +390,10 @@ void renderer::RT64Context::update_screen() {
      app->updateScreen();
  }
  
