@@ -372,13 +372,15 @@ index 0000000..c0800aa
 +    };
 +};
 diff --git a/src/common/rt64_user_configuration.cpp b/src/common/rt64_user_configuration.cpp
-index cc35442..b511c6d 100644
+index cc35442..f05f584 100644
 --- a/src/common/rt64_user_configuration.cpp
 +++ b/src/common/rt64_user_configuration.cpp
-@@ -4,11 +4,68 @@
+@@ -4,11 +4,70 @@
  
  #include "rt64_user_configuration.h"
  
++#include <algorithm>
++#include <cstdio>
 +#include <cstdlib>
 +#include <cstring>
  #include <iomanip>
@@ -444,7 +446,7 @@ index cc35442..b511c6d 100644
      void to_json(json &j, const UserConfiguration &cfg) {
          j["graphicsAPI"] = cfg.graphicsAPI;
          j["resolution"] = cfg.resolution;
-@@ -29,6 +86,12 @@ namespace RT64 {
+@@ -29,6 +88,12 @@ namespace RT64 {
          j["hardwareResolve"] = cfg.hardwareResolve;
          j["idleWorkActive"] = cfg.idleWorkActive;
          j["developerMode"] = cfg.developerMode;
@@ -457,7 +459,7 @@ index cc35442..b511c6d 100644
      }
  
      void from_json(const json &j, UserConfiguration &cfg) {
-@@ -52,6 +115,12 @@ namespace RT64 {
+@@ -52,6 +117,12 @@ namespace RT64 {
          cfg.hardwareResolve = j.value("hardwareResolve", defaultCfg.hardwareResolve);
          cfg.idleWorkActive = j.value("idleWorkActive", defaultCfg.idleWorkActive);
          cfg.developerMode = j.value("developerMode", defaultCfg.developerMode);
@@ -470,7 +472,7 @@ index cc35442..b511c6d 100644
      }
  
      template <typename T>
-@@ -83,6 +152,21 @@ namespace RT64 {
+@@ -83,6 +154,21 @@ namespace RT64 {
          hardwareResolve = HardwareResolve::Automatic;
          idleWorkActive = true;
          developerMode = false;
@@ -492,7 +494,7 @@ index cc35442..b511c6d 100644
      }
  
      void UserConfiguration::validate() {
-@@ -97,11 +181,17 @@ namespace RT64 {
+@@ -97,11 +183,17 @@ namespace RT64 {
          clampEnum<RefreshRate>(refreshRate);
          clampEnum<InternalColorFormat>(internalColorFormat);
          clampEnum<HardwareResolve>(hardwareResolve);
@@ -1245,10 +1247,19 @@ index 87392d0..fb20d9e 100644
              const std::vector<float> &prevTcFloats = prevWorkload.drawData.tcFloats;
              std::vector<float> &curVelFloats = curWorkload.drawData.tcVelFloats;
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 7de5b69..9423411 100644
+index 7de5b69..155a0e5 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
-@@ -9,6 +9,16 @@
+@@ -4,11 +4,25 @@
+ 
+ #include "rt64_present_queue.h"
+ 
++#include <chrono>
++#include <cstdio>
++#include <cstdlib>
++
+ #include "common/rt64_thread.h"
+ #include "rhi/rt64_render_hooks.h"
  
  #include "rt64_workload_queue.h"
  
@@ -1265,7 +1276,7 @@ index 7de5b69..9423411 100644
  namespace RT64 {
      // PresentQueue
  
-@@ -26,6 +36,18 @@ namespace RT64 {
+@@ -26,6 +40,18 @@ namespace RT64 {
          }
  
          presentIdCondition.notify_all();
@@ -1284,7 +1295,7 @@ index 7de5b69..9423411 100644
      }
  
      void PresentQueue::reset() {
-@@ -101,6 +123,8 @@ namespace RT64 {
+@@ -101,6 +127,8 @@ namespace RT64 {
          bool removeBlackBorders;
          UserConfiguration::RefreshRate refreshRate;
          UserConfiguration::Filtering filtering;
@@ -1293,7 +1304,7 @@ index 7de5b69..9423411 100644
          uint32_t viOriginalRate;
          uint32_t targetRate;
          {
-@@ -110,14 +134,23 @@ namespace RT64 {
+@@ -110,14 +138,23 @@ namespace RT64 {
              removeBlackBorders = ext.sharedResources->enhancementConfig.presentation.removeBlackBorders;
              refreshRate = ext.sharedResources->userConfig.refreshRate;
              filtering = ext.sharedResources->userConfig.filtering;
@@ -1318,7 +1329,7 @@ index 7de5b69..9423411 100644
  
          // TODO: There's a possible race condition interactions that can happen while the workload
          // queue is rendering extra frames and the present event is processed while it's generating
-@@ -188,7 +221,7 @@ namespace RT64 {
+@@ -188,7 +225,7 @@ namespace RT64 {
                      }
                  }
  
@@ -1327,7 +1338,7 @@ index 7de5b69..9423411 100644
                      framesToPresent = frameCounters.count;
                  }
                  else {
-@@ -268,8 +301,39 @@ namespace RT64 {
+@@ -268,8 +305,39 @@ namespace RT64 {
          }
          
          for (int32_t i = 0; i < framesToPresent; i++) {
@@ -1368,7 +1379,7 @@ index 7de5b69..9423411 100644
                  // Stall until the interpolated color target is available.
                  const uint32_t targetIndex = usingMSAA ? i : (i - 1);
                  std::unique_lock<std::mutex> interpolatedLock(ext.sharedResources->interpolatedMutex);
-@@ -301,7 +365,9 @@ namespace RT64 {
+@@ -301,7 +369,9 @@ namespace RT64 {
              uint32_t swapChainIndex = 0;
              const bool presentFrame = (i < framesToPresent) && swapChainValid;
              if (presentFrame) {
@@ -1378,7 +1389,7 @@ index 7de5b69..9423411 100644
              }
  
              if (presentFrame && swapChainValid) {
-@@ -339,18 +405,80 @@ namespace RT64 {
+@@ -339,18 +409,80 @@ namespace RT64 {
                          renderParams.textureWidth = colorTarget->width;
                          renderParams.textureHeight = colorTarget->height;
                      }
@@ -1464,7 +1475,7 @@ index 7de5b69..9423411 100644
                      drawHook(commandList, swapChainFramebuffer);
                  }
  
-@@ -366,7 +494,9 @@ namespace RT64 {
+@@ -366,7 +498,9 @@ namespace RT64 {
                      RenderCommandSemaphore *waitSemaphore = acquiredSemaphore.get();
                      RenderCommandSemaphore *signalSemaphore = drawSemaphores[swapChainIndex].get();
                      ext.presentGraphicsWorker->commandQueue->executeCommandLists(&commandList, 1, &waitSemaphore, 1, &signalSemaphore, 1, ext.presentGraphicsWorker->commandFence.get());
@@ -1474,7 +1485,7 @@ index 7de5b69..9423411 100644
                  }
              }
  
-@@ -391,6 +521,7 @@ namespace RT64 {
+@@ -391,6 +525,7 @@ namespace RT64 {
  
              if (presentFrame && swapChainValid) {
                  // Wait until the approximate time the next present should be at the current intended rate.
@@ -1482,7 +1493,7 @@ index 7de5b69..9423411 100644
                  if ((presentTimestamp != Timestamp()) && (targetRate > 0) && (targetRate > viOriginalRate)) {
                      Timer::preciseSleepUntil(presentTimestamp + std::chrono::nanoseconds(1'000'000'000 / targetRate));
                  }
-@@ -399,12 +530,259 @@ namespace RT64 {
+@@ -399,12 +534,259 @@ namespace RT64 {
                      ext.swapChain->wait();
                  }
  
@@ -3186,10 +3197,17 @@ index 69a82ac..31f6122 100644
              builder.end();
  
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..9dc3a80 100644
+index 9fae0d4..a27de32 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
-@@ -7,6 +7,7 @@
+@@ -4,9 +4,14 @@
+ 
+ #include "rt64_framebuffer_renderer.h"
+ 
++#include <algorithm>
++#include <cfloat>
++#include <cmath>
++
  #include "../include/rt64_extended_gbi.h"
  
  #include "common/rt64_elapsed_timer.h"
@@ -3197,7 +3215,7 @@ index 9fae0d4..9dc3a80 100644
  #include "common/rt64_math.h"
  #include "hle/rt64_color_converter.h"
  #include "gbi/rt64_f3d.h"
-@@ -1435,6 +1436,16 @@ namespace RT64 {
+@@ -1435,6 +1440,16 @@ namespace RT64 {
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
          const float aspectRatioScale = adjustRatio ? (p.aspectRatioTarget / p.aspectRatioSource) : 1.0f;
@@ -3214,7 +3232,7 @@ index 9fae0d4..9dc3a80 100644
          InstanceDrawCall instanceDrawCall;
          interop::RenderIndices renderIndices;
          uint32_t globalCallIndex = 0;
-@@ -1488,9 +1499,17 @@ namespace RT64 {
+@@ -1488,9 +1503,17 @@ namespace RT64 {
                  // The call's scissor spans the whole width of the framebuffer pair scissor. Custom origin must not be in use to be able to use the stretched viewport.
                  const auto &viewport = drawData.rspViewports[proj.transformsIndex];
                  FixedRect intersectionRect = proj.scissorRect.intersection(viewport.rect(viewportClipRatios));
@@ -3233,7 +3251,7 @@ index 9fae0d4..9dc3a80 100644
                  if (useWideViewport) {
                      projInvRatioScale = 1.0f;
                  }
-@@ -1506,6 +1525,15 @@ namespace RT64 {
+@@ -1506,6 +1529,15 @@ namespace RT64 {
                  viewportClip = convertViewportRect(viewport.rect(viewportClipRatios), p.resolutionScale, p.fbWidth, projInvRatioScale, extOriginPercentage, 0.0f, viewportOrigin, viewportOrigin);
              }
  
@@ -3249,7 +3267,7 @@ index 9fae0d4..9dc3a80 100644
              for (uint32_t d = 0; (d < proj.gameCallCount) && (globalCallIndex < p.maxGameCall); d++) {
                  const GameCall &call = proj.gameCalls[d];
                  renderIndices.instanceIndex = call.callDesc.callIndex;
-@@ -1625,6 +1653,7 @@ namespace RT64 {
+@@ -1625,6 +1657,7 @@ namespace RT64 {
  
                          float invRatioScale = 1.0f / aspectRatioScale;
                          float horizontalMisalignment = 0.0f;
@@ -3257,7 +3275,7 @@ index 9fae0d4..9dc3a80 100644
                          switch (proj.type) {
                          case Projection::Type::Perspective:
                          case Projection::Type::Orthographic: {
-@@ -1645,14 +1674,83 @@ namespace RT64 {
+@@ -1645,14 +1678,83 @@ namespace RT64 {
                              // The call's scissor spans the whole width of the framebuffer pair scissor. The rect must not be using extended origins.
                              const bool regularOrigins = (call.callDesc.rectLeftOrigin == G_EX_ORIGIN_NONE) && (call.callDesc.rectRightOrigin == G_EX_ORIGIN_NONE);
                              const bool coversScissorWidth = regularOrigins && (call.callDesc.rect.ulx <= fbPair.scissorRect.ulx) && (call.callDesc.rect.lrx >= fbPair.scissorRect.lrx);
@@ -3342,7 +3360,7 @@ index 9fae0d4..9dc3a80 100644
                              triangles.screenScale = { viewportRect.width / framebuffer.viewport.width, viewportRect.height / framebuffer.viewport.height };
                              triangles.screenOffset.x = halfPixelOffset.x + ((viewportRect.x + viewportRect.width / 2.0f) - halfViewportSize.x) / halfViewportSize.x;
                              triangles.screenOffset.y = halfPixelOffset.y + (halfViewportSize.y - (viewportRect.y + viewportRect.height / 2.0f)) / halfViewportSize.y;
-@@ -1676,7 +1774,47 @@ namespace RT64 {
+@@ -1676,7 +1778,47 @@ namespace RT64 {
                              break;
                          }
  

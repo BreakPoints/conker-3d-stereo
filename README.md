@@ -216,7 +216,8 @@ Run `host/build/ConkerRecomp` (Linux and macOS) or `host\build-win\ConkerRecomp.
 
 - **Settings** (in the launcher, or Esc / the controller's menu button in game)
   has graphics (resolution, aspect ratio, anti-aliasing, frame rate, 3D stereo
-  modes with separation and convergence), controls, sound and mod options.
+  modes with separation, convergence, auto convergence, HUD depth and 3D gamma),
+  controls, sound and mod options.
 - Saves, settings and the stored ROM live in `~/.config/ConkerRecompiled` on
   Linux, `~/Library/Application Support/ConkerRecompiled` on macOS and
   `%LOCALAPPDATA%\ConkerRecompiled` on Windows. Put an empty `portable.txt` next
