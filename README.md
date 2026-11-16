@@ -255,8 +255,9 @@ the settings' Quit prompt: the program restarts at the launcher.
   has its options by tab: General (deadzone, rumble), Camera (turning, the free
   camera, field of view, aiming with the stick), Mouse & Gyro, Graphics
   (resolution, aspect ratio, anti-aliasing, frame rate, texture packs, 3D stereo
-  modes with separation and convergence), Controls, Sound, Achievements and Mods.
-  The tabs scroll sideways when they don't all fit.
+  modes with separation, convergence, auto convergence, HUD depth and 3D gamma),
+  Controls, Sound, Achievements and Mods. The tabs scroll sideways when they don't
+  all fit.
 - **Achievements** are the program's own, for reaching the game's scenes (the
   ones its Chapters menu lists), from the first death to the end credits. They're
   kept on this computer, in `achievements.txt` with the settings, and the

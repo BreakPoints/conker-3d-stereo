@@ -651,13 +651,15 @@ index 3f74ea2..3988595 100644
          void resolveShifts(std::unordered_map<uint64_t, ReplacementResolvedPath> &resolvedPathMap);
          static uint64_t stringToHash(const std::string &str);
 diff --git a/src/common/rt64_user_configuration.cpp b/src/common/rt64_user_configuration.cpp
-index cc35442..b511c6d 100644
+index cc35442..f05f584 100644
 --- a/src/common/rt64_user_configuration.cpp
 +++ b/src/common/rt64_user_configuration.cpp
-@@ -4,11 +4,68 @@
+@@ -4,11 +4,70 @@
  
  #include "rt64_user_configuration.h"
  
++#include <algorithm>
++#include <cstdio>
 +#include <cstdlib>
 +#include <cstring>
  #include <iomanip>
@@ -723,7 +725,7 @@ index cc35442..b511c6d 100644
      void to_json(json &j, const UserConfiguration &cfg) {
          j["graphicsAPI"] = cfg.graphicsAPI;
          j["resolution"] = cfg.resolution;
-@@ -29,6 +86,12 @@ namespace RT64 {
+@@ -29,6 +88,12 @@ namespace RT64 {
          j["hardwareResolve"] = cfg.hardwareResolve;
          j["idleWorkActive"] = cfg.idleWorkActive;
          j["developerMode"] = cfg.developerMode;
@@ -736,7 +738,7 @@ index cc35442..b511c6d 100644
      }
  
      void from_json(const json &j, UserConfiguration &cfg) {
-@@ -52,6 +115,12 @@ namespace RT64 {
+@@ -52,6 +117,12 @@ namespace RT64 {
          cfg.hardwareResolve = j.value("hardwareResolve", defaultCfg.hardwareResolve);
          cfg.idleWorkActive = j.value("idleWorkActive", defaultCfg.idleWorkActive);
          cfg.developerMode = j.value("developerMode", defaultCfg.developerMode);
@@ -749,7 +751,7 @@ index cc35442..b511c6d 100644
      }
  
      template <typename T>
-@@ -83,6 +152,21 @@ namespace RT64 {
+@@ -83,6 +154,21 @@ namespace RT64 {
          hardwareResolve = HardwareResolve::Automatic;
          idleWorkActive = true;
          developerMode = false;
@@ -771,7 +773,7 @@ index cc35442..b511c6d 100644
      }
  
      void UserConfiguration::validate() {
-@@ -97,11 +181,17 @@ namespace RT64 {
+@@ -97,11 +183,17 @@ namespace RT64 {
          clampEnum<RefreshRate>(refreshRate);
          clampEnum<InternalColorFormat>(internalColorFormat);
          clampEnum<HardwareResolve>(hardwareResolve);
@@ -1846,10 +1848,19 @@ index e1889e5..c5d5f40 100644
          uint64_t workloadId = 0;
      };
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 7de5b69..2ae3ef7 100644
+index 7de5b69..8518786 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
-@@ -9,7 +9,26 @@
+@@ -4,12 +4,35 @@
+ 
+ #include "rt64_present_queue.h"
+ 
++#include <chrono>
++#include <cstdio>
++#include <cstdlib>
++
+ #include "common/rt64_thread.h"
+ #include "rhi/rt64_render_hooks.h"
  
  #include "rt64_workload_queue.h"
  
@@ -1876,7 +1887,7 @@ index 7de5b69..2ae3ef7 100644
      // PresentQueue
  
      PresentQueue::PresentQueue() {
-@@ -26,6 +45,18 @@ namespace RT64 {
+@@ -26,6 +49,18 @@ namespace RT64 {
          }
  
          presentIdCondition.notify_all();
@@ -1895,7 +1906,7 @@ index 7de5b69..2ae3ef7 100644
      }
  
      void PresentQueue::reset() {
-@@ -101,6 +132,8 @@ namespace RT64 {
+@@ -101,6 +136,8 @@ namespace RT64 {
          bool removeBlackBorders;
          UserConfiguration::RefreshRate refreshRate;
          UserConfiguration::Filtering filtering;
@@ -1904,7 +1915,7 @@ index 7de5b69..2ae3ef7 100644
          uint32_t viOriginalRate;
          uint32_t targetRate;
          {
-@@ -110,14 +143,23 @@ namespace RT64 {
+@@ -110,14 +147,23 @@ namespace RT64 {
              removeBlackBorders = ext.sharedResources->enhancementConfig.presentation.removeBlackBorders;
              refreshRate = ext.sharedResources->userConfig.refreshRate;
              filtering = ext.sharedResources->userConfig.filtering;
@@ -1929,7 +1940,7 @@ index 7de5b69..2ae3ef7 100644
  
          // TODO: There's a possible race condition interactions that can happen while the workload
          // queue is rendering extra frames and the present event is processed while it's generating
-@@ -188,7 +230,8 @@ namespace RT64 {
+@@ -188,7 +234,8 @@ namespace RT64 {
                      }
                  }
  
@@ -1939,7 +1950,7 @@ index 7de5b69..2ae3ef7 100644
                      framesToPresent = frameCounters.count;
                  }
                  else {
-@@ -268,8 +311,39 @@ namespace RT64 {
+@@ -268,8 +315,39 @@ namespace RT64 {
          }
          
          for (int32_t i = 0; i < framesToPresent; i++) {
@@ -1980,7 +1991,7 @@ index 7de5b69..2ae3ef7 100644
                  // Stall until the interpolated color target is available.
                  const uint32_t targetIndex = usingMSAA ? i : (i - 1);
                  std::unique_lock<std::mutex> interpolatedLock(ext.sharedResources->interpolatedMutex);
-@@ -301,7 +375,9 @@ namespace RT64 {
+@@ -301,7 +379,9 @@ namespace RT64 {
              uint32_t swapChainIndex = 0;
              const bool presentFrame = (i < framesToPresent) && swapChainValid;
              if (presentFrame) {
@@ -1990,7 +2001,7 @@ index 7de5b69..2ae3ef7 100644
              }
  
              if (presentFrame && swapChainValid) {
-@@ -339,18 +415,80 @@ namespace RT64 {
+@@ -339,18 +419,80 @@ namespace RT64 {
                          renderParams.textureWidth = colorTarget->width;
                          renderParams.textureHeight = colorTarget->height;
                      }
@@ -2032,16 +2043,16 @@ index 7de5b69..2ae3ef7 100644
 +                    if (renderParams.textureRight != nullptr) {
 +                        commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(renderParams.textureRight, RenderTextureLayout::SHADER_READ));
 +                    }
-+                }
-+
+                 }
+ 
 +                // Conker: LeiaSR composes into its own intermediate and weaves that onto
 +                // the swap chain; every other mode presents the composed image directly.
 +                bool presented = false;
 +                bool uiDrawn = false;
 +                if ((stereoMode == UserConfiguration::StereoMode::LeiaSR) && (renderParams.texture != nullptr) && (renderParams.textureRight != nullptr)) {
 +                    presented = leiaSRPresent(renderParams, swapChainFramebuffer, swapChainTexture, ext.swapChain->getWidth(), ext.swapChain->getHeight(), uiDrawn);
-                 }
- 
++                }
++
 +                // Conker: the modes that give each eye half of the screen (side-by-side,
 +                // cross-eye, top-and-bottom, and LeiaSR's side-by-side fallback) can't take the
 +                // UI overlay across the whole swap chain: a 3D TV would split a menu between
@@ -2076,7 +2087,7 @@ index 7de5b69..2ae3ef7 100644
                      drawHook(commandList, swapChainFramebuffer);
                  }
  
-@@ -366,7 +504,9 @@ namespace RT64 {
+@@ -366,7 +508,9 @@ namespace RT64 {
                      RenderCommandSemaphore *waitSemaphore = acquiredSemaphore.get();
                      RenderCommandSemaphore *signalSemaphore = drawSemaphores[swapChainIndex].get();
                      ext.presentGraphicsWorker->commandQueue->executeCommandLists(&commandList, 1, &waitSemaphore, 1, &signalSemaphore, 1, ext.presentGraphicsWorker->commandFence.get());
@@ -2086,7 +2097,7 @@ index 7de5b69..2ae3ef7 100644
                  }
              }
  
-@@ -391,6 +531,7 @@ namespace RT64 {
+@@ -391,6 +535,7 @@ namespace RT64 {
  
              if (presentFrame && swapChainValid) {
                  // Wait until the approximate time the next present should be at the current intended rate.
@@ -2094,7 +2105,7 @@ index 7de5b69..2ae3ef7 100644
                  if ((presentTimestamp != Timestamp()) && (targetRate > 0) && (targetRate > viOriginalRate)) {
                      Timer::preciseSleepUntil(presentTimestamp + std::chrono::nanoseconds(1'000'000'000 / targetRate));
                  }
-@@ -399,12 +540,260 @@ namespace RT64 {
+@@ -399,12 +544,260 @@ namespace RT64 {
                      ext.swapChain->wait();
                  }
  
@@ -4831,10 +4842,17 @@ index 69a82ac..31f6122 100644
              builder.end();
  
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..867e2eb 100644
+index 9fae0d4..8476c8a 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
-@@ -7,6 +7,7 @@
+@@ -4,9 +4,14 @@
+ 
+ #include "rt64_framebuffer_renderer.h"
+ 
++#include <algorithm>
++#include <cfloat>
++#include <cmath>
++
  #include "../include/rt64_extended_gbi.h"
  
  #include "common/rt64_elapsed_timer.h"
@@ -4842,7 +4860,7 @@ index 9fae0d4..867e2eb 100644
  #include "common/rt64_math.h"
  #include "hle/rt64_color_converter.h"
  #include "gbi/rt64_f3d.h"
-@@ -218,7 +219,7 @@ namespace RT64 {
+@@ -218,7 +223,7 @@ namespace RT64 {
          textureCacheFreeSpaces = textureCache->textureMap.freeSpaces;
          textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
          textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
@@ -4851,7 +4869,7 @@ index 9fae0d4..867e2eb 100644
          dynamicTextureViewVector.clear();
          dynamicTextureBarrierVector.clear();
      }
-@@ -599,8 +600,27 @@ namespace RT64 {
+@@ -599,8 +604,27 @@ namespace RT64 {
              case InstanceDrawCall::Type::FillRect: {
                  const auto &clearRect = drawCall.clearRect;
                  RenderTarget *chosenTarget = (fbStorage->colorTarget != nullptr) ? fbStorage->colorTarget : fbStorage->depthTarget;
@@ -4881,7 +4899,7 @@ index 9fae0d4..867e2eb 100644
                  uint32_t clearRectCount = rectCoversWholeTarget ? 0 : 1;
                  if (fbStorage->colorTarget != nullptr) {
                      worker->commandList->clearColor(0, clearRect.color, clearRects, clearRectCount);
-@@ -1435,6 +1455,16 @@ namespace RT64 {
+@@ -1435,6 +1459,16 @@ namespace RT64 {
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
          const float aspectRatioScale = adjustRatio ? (p.aspectRatioTarget / p.aspectRatioSource) : 1.0f;
@@ -4898,7 +4916,7 @@ index 9fae0d4..867e2eb 100644
          InstanceDrawCall instanceDrawCall;
          interop::RenderIndices renderIndices;
          uint32_t globalCallIndex = 0;
-@@ -1450,6 +1480,46 @@ namespace RT64 {
+@@ -1450,6 +1484,46 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -4945,7 +4963,7 @@ index 9fae0d4..867e2eb 100644
          for (uint32_t pr = 0; (pr < fbPair.projectionCount) && (globalCallIndex < p.maxGameCall); pr++) {
              const Projection &proj = fbPair.projections[pr];
              if (proj.scissorRect.isNull()) {
-@@ -1488,9 +1558,28 @@ namespace RT64 {
+@@ -1488,9 +1562,28 @@ namespace RT64 {
                  // The call's scissor spans the whole width of the framebuffer pair scissor. Custom origin must not be in use to be able to use the stretched viewport.
                  const auto &viewport = drawData.rspViewports[proj.transformsIndex];
                  FixedRect intersectionRect = proj.scissorRect.intersection(viewport.rect(viewportClipRatios));
@@ -4975,7 +4993,7 @@ index 9fae0d4..867e2eb 100644
                  if (useWideViewport) {
                      projInvRatioScale = 1.0f;
                  }
-@@ -1506,6 +1595,15 @@ namespace RT64 {
+@@ -1506,6 +1599,15 @@ namespace RT64 {
                  viewportClip = convertViewportRect(viewport.rect(viewportClipRatios), p.resolutionScale, p.fbWidth, projInvRatioScale, extOriginPercentage, 0.0f, viewportOrigin, viewportOrigin);
              }
  
@@ -4991,7 +5009,7 @@ index 9fae0d4..867e2eb 100644
              for (uint32_t d = 0; (d < proj.gameCallCount) && (globalCallIndex < p.maxGameCall); d++) {
                  const GameCall &call = proj.gameCalls[d];
                  renderIndices.instanceIndex = call.callDesc.callIndex;
-@@ -1548,6 +1646,27 @@ namespace RT64 {
+@@ -1548,6 +1650,27 @@ namespace RT64 {
                      }
  
                      clearRect.rect = convertFixedRect(call.callDesc.rect, p.resolutionScale, p.fbWidth, invRatioScale, extOriginPercentage, horizontalMisalignment, call.callDesc.rectLeftOrigin, call.callDesc.rectRightOrigin);
@@ -5019,7 +5037,7 @@ index 9fae0d4..867e2eb 100644
                  }
                  else if (call.callDesc.extendedType != DrawExtendedType::None) {
                      switch (call.callDesc.extendedType) {
-@@ -1625,6 +1744,7 @@ namespace RT64 {
+@@ -1625,6 +1748,7 @@ namespace RT64 {
  
                          float invRatioScale = 1.0f / aspectRatioScale;
                          float horizontalMisalignment = 0.0f;
@@ -5027,7 +5045,7 @@ index 9fae0d4..867e2eb 100644
                          switch (proj.type) {
                          case Projection::Type::Perspective:
                          case Projection::Type::Orthographic: {
-@@ -1645,14 +1765,99 @@ namespace RT64 {
+@@ -1645,14 +1769,99 @@ namespace RT64 {
                              // The call's scissor spans the whole width of the framebuffer pair scissor. The rect must not be using extended origins.
                              const bool regularOrigins = (call.callDesc.rectLeftOrigin == G_EX_ORIGIN_NONE) && (call.callDesc.rectRightOrigin == G_EX_ORIGIN_NONE);
                              const bool coversScissorWidth = regularOrigins && (call.callDesc.rect.ulx <= fbPair.scissorRect.ulx) && (call.callDesc.rect.lrx >= fbPair.scissorRect.lrx);
@@ -5129,7 +5147,7 @@ index 9fae0d4..867e2eb 100644
                              triangles.screenScale = { viewportRect.width / framebuffer.viewport.width, viewportRect.height / framebuffer.viewport.height };
                              triangles.screenOffset.x = halfPixelOffset.x + ((viewportRect.x + viewportRect.width / 2.0f) - halfViewportSize.x) / halfViewportSize.x;
                              triangles.screenOffset.y = halfPixelOffset.y + (halfViewportSize.y - (viewportRect.y + viewportRect.height / 2.0f)) / halfViewportSize.y;
-@@ -1676,7 +1881,47 @@ namespace RT64 {
+@@ -1676,7 +1885,47 @@ namespace RT64 {
                              break;
                          }
  

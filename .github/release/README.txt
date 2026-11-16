@@ -23,6 +23,18 @@ developer ID, so macOS blocks it the first time: open it once, then in System
 Settings > Privacy & Security choose Open Anyway. Or, in Terminal, run
 xattr -dr com.apple.quarantine ConkerRecomp.app before opening it.
 
+3D
+  Settings > Graphics > 3D Stereo turns on stereoscopic 3D: side by side,
+  cross-eye, top and bottom, interlaced (line by line, for passive 3D TVs and
+  monitors) or Leia SR (glasses-free, Windows only). Separation sets how strong
+  the depth is, Convergence what sits on the screen plane, HUD Depth where the
+  HUD floats, and 3D Gamma brightens the picture for 3D glasses. Anti-aliasing
+  turns itself off in 3D. While playing, Ctrl + arrows adjust separation and
+  convergence, Ctrl + Page Up/Page Down the HUD depth (Alt for bigger steps).
+  Leia SR needs Leia's SR Platform installed and the D3D12 graphics API; if
+  something goes wrong, start the game with leia_test.cmd, which logs the run
+  to leia-log.txt.
+
 Save states: F5 saves the game as it is, anywhere, F7 loads it back, and F6
 switches between the nine slots. The game's own saves are never touched. More
 in docs/save-states.md on the GitHub page.
