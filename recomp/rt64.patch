@@ -2362,7 +2362,7 @@ index 2970e71..201f657 100644
                  RenderWorkerExecution execution(ext.framebufferGraphicsWorker);
                  framebufferManager.uploadRAM(ext.framebufferGraphicsWorker, differentFbs.data(), differentFbs.size(), workload.fbChangePool, RDRAM, true, drawFbOperations, drawFbDiscards, ext.shaderLibrary);
 diff --git a/src/hle/rt64_workload_queue.cpp b/src/hle/rt64_workload_queue.cpp
-index 5a331aa..9c64095 100644
+index 5a331aa..0a83f5e 100644
 --- a/src/hle/rt64_workload_queue.cpp
 +++ b/src/hle/rt64_workload_queue.cpp
 @@ -4,6 +4,17 @@
@@ -2569,7 +2569,7 @@ index 5a331aa..9c64095 100644
                      RenderFramebufferStorage &fbStorage = renderFramebufferManager->get(fbKey, colorTarget, (depthTarget != nullptr) ? depthTarget : dummyDepthTarget.get());
                      FramebufferRenderer::DrawParams drawParams;
                      drawParams.worker = ext.workloadGraphicsWorker;
-@@ -639,6 +729,17 @@ namespace RT64 {
+@@ -639,6 +729,20 @@ namespace RT64 {
                      drawParams.postBlendNoise = workloadConfig.postBlendNoise;
                      drawParams.postBlendNoiseNegative = workloadConfig.postBlendNoiseNegative;
                      drawParams.maxGameCall = std::min(gameCallCountMax - gameCallCursor, fbPair.gameCallCount);
@@ -2579,6 +2579,9 @@ index 5a331aa..9c64095 100644
 +            // Conker: the auto-convergence loop's focus depth, for the rectangles of
 +            // scripted scenes (see DrawParams::stereoFocusDepth).
 +            drawParams.stereoFocusDepth = workloadConfig.stereoFocusDepth;
++            drawParams.stereoSceneDepthGrid = sceneDepthGridValid ? sceneDepthGrid.data() : nullptr;
++            drawParams.stereoSceneDepthGridWidth = SceneDepthGridWidth;
++            drawParams.stereoSceneDepthGridHeight = SceneDepthGridHeight;
 +            // Conker: HUD depth, for the pairs drawing the image that's displayed (the
 +            // eye target's color image) only: offscreen buffers keep their 2D in place.
 +            drawParams.stereoHudDepth = workloadConfig.stereoHudDepth;
@@ -2587,7 +2590,7 @@ index 5a331aa..9c64095 100644
                      framebufferRenderer->addFramebuffer(drawParams);
                  }
                  
-@@ -709,6 +810,12 @@ namespace RT64 {
+@@ -709,6 +813,12 @@ namespace RT64 {
              for (uint32_t f = 0; f < fbPairCount; f++) {
                  const FramebufferPair &fbPair = workload.fbPairs[f];
                  bool validTargets = getTargetsFromPair(f);
@@ -2600,7 +2603,7 @@ index 5a331aa..9c64095 100644
                  fbManager.recordOperations(ext.workloadGraphicsWorker, &workload.fbChangePool, &workload.fbStorage, ext.shaderLibrary, ext.textureCache,
                      fbPair.startFbOperations, targetManager, fixedResScale, f, workload.submissionFrame);
  
-@@ -738,6 +845,11 @@ namespace RT64 {
+@@ -738,6 +848,11 @@ namespace RT64 {
  
                          if (colorFb->height > colorFb->readHeight) {
                              uint32_t readRowCount = colorFb->height - colorFb->readHeight;
@@ -2612,7 +2615,7 @@ index 5a331aa..9c64095 100644
                              FramebufferChange *colorFbChange = colorFb->readChangeFromStorage(ext.workloadGraphicsWorker, workload.fbStorage, scratchFbChangePool,
                                  Framebuffer::Type::Color, colorImg.fmt, f, colorFb->readHeight, readRowCount, ext.shaderLibrary);
  
-@@ -756,10 +868,20 @@ namespace RT64 {
+@@ -756,10 +871,20 @@ namespace RT64 {
                          depthFbTypeChanged = (depthFb->lastWriteType == Framebuffer::Type::Color);
  
                          bool imgFormatChanged = (colorFb == nullptr) ? colorImg.formatChanged : depthImg.formatChanged;
@@ -2633,7 +2636,7 @@ index 5a331aa..9c64095 100644
                              RenderTargetKey otherDepthTargetKey(depthFb->addressStart, depthFb->width, depthFb->siz, depthFb->lastWriteType);
                              RenderTarget &otherDepthTarget = targetManager.get(otherDepthTargetKey);
                              if (!otherDepthTarget.isEmpty()) {
-@@ -777,6 +899,10 @@ namespace RT64 {
+@@ -777,6 +902,10 @@ namespace RT64 {
  
                          if (depthFb->height > depthFb->readHeight) {
                              uint32_t readRowCount = depthFb->height - depthFb->readHeight;
@@ -2644,7 +2647,7 @@ index 5a331aa..9c64095 100644
                              FramebufferChange *depthFbChange = depthFb->readChangeFromStorage(ext.workloadGraphicsWorker, workload.fbStorage, scratchFbChangePool, Framebuffer::Type::Depth,
                                  G_IM_FMT_DEPTH, f, depthFb->readHeight, readRowCount, ext.shaderLibrary);
  
-@@ -837,17 +963,42 @@ namespace RT64 {
+@@ -837,17 +966,42 @@ namespace RT64 {
                      fbPair.endFbOperations, targetManager, fixedResScale, f, workload.submissionFrame);
              }
  
@@ -2662,7 +2665,7 @@ index 5a331aa..9c64095 100644
 +#       else
 +            constexpr bool depthReadbackSupported = true;
 +#       endif
-+            if (depthReadbackSupported && (stereoEye == 0) && workloadConfig.stereoEnabled && (stereoAutoConvergence.wantsDepth() || depthDumpRequested) && (autoConvergenceDepthTarget != nullptr)) {
++            if (depthReadbackSupported && (stereoEye == 0) && workloadConfig.stereoEnabled && (stereoAutoConvergence.wantsDepth() || sceneDepthWanted || depthDumpRequested) && (autoConvergenceDepthTarget != nullptr)) {
 +                recordAutoConvergenceCapture(ext.workloadGraphicsWorker->commandList.get(), autoConvergenceDepthTarget);
 +            }
 +
@@ -2687,7 +2690,7 @@ index 5a331aa..9c64095 100644
  
              // Indicate to the texture cache it's safe to delete the textures if no locks are active.
              ext.textureCache->decrementLock();
-@@ -858,12 +1009,206 @@ namespace RT64 {
+@@ -858,12 +1012,239 @@ namespace RT64 {
          }
  
          framebufferRenderer->advanceFrame(workloadConfig.raytracingEnabled);
@@ -2832,6 +2835,39 @@ index 5a331aa..9c64095 100644
 +        autoConvergencePendingNear = zNear;
 +        autoConvergencePendingMedian = zMedian;
 +
++        // Conker: the scripted scenes' depth grid. The nearest view depth in each cell of
++        // the whole frame (every other pixel), 0 where nothing was drawn.
++        if (sceneDepthWanted && dumpInvertible && (width > 0) && (height > 0)) {
++            sceneDepthGridPending.assign(size_t(SceneDepthGridWidth) * SceneDepthGridHeight, 0.0f);
++            const bool hasGridViewport = std::fabs(dumpVpScale) > 1e-6f;
++            for (uint32_t y = 0; y < height; y += 2) {
++                const float *row = data + uint64_t(y) * pitchFloats;
++                float *gridRow = sceneDepthGridPending.data() + size_t((y * SceneDepthGridHeight) / height) * SceneDepthGridWidth;
++                for (uint32_t x = 0; x < width; x += 2) {
++                    const float depth = row[x];
++                    if (!std::isfinite(depth) || (depth <= 0.0f) || (depth >= 1.0f)) {
++                        continue;
++                    }
++
++                    const float ndc = hasGridViewport ? ((depth - dumpVpTranslate) / dumpVpScale) : (2.0f * depth - 1.0f);
++                    const float denominator = ndc * dumpM23 - dumpM22;
++                    if (std::fabs(denominator) < 1e-9f) {
++                        continue;
++                    }
++
++                    const float viewZ = std::fabs((dumpM32 - ndc * dumpM33) / denominator);
++                    if (!std::isfinite(viewZ) || (viewZ <= 1.0f)) {
++                        continue;
++                    }
++
++                    float &cell = gridRow[(x * SceneDepthGridWidth) / width];
++                    cell = (cell > 0.0f) ? std::min(cell, viewZ) : viewZ;
++                }
++            }
++
++            sceneDepthGridPendingValid = true;
++        }
++
 +        // TEMP-DEBUG: CONKER_DEPTH_DUMP writes this frame's view-depth image (device
 +        // depth inverted through the world camera's z row) as a 16-bit PGM in the
 +        // working directory, every 120 frames. A colour capture cannot show depth
@@ -2894,7 +2930,7 @@ index 5a331aa..9c64095 100644
      void WorkloadQueue::threadAdvanceBarrier() {
          std::scoped_lock<std::mutex> cursorLock(cursorMutex);
          barrierCursor = (barrierCursor + 1) % workloads.size();
-@@ -926,6 +1271,43 @@ namespace RT64 {
+@@ -926,6 +1307,72 @@ namespace RT64 {
                  uint32_t workloadIndex = processCursor;
                  curFrame.set(*this, &workloadIndex, 1);
  
@@ -2935,10 +2971,39 @@ index 5a331aa..9c64095 100644
 +
 +                stereoCameraValid = stereoCameraFound;
 +
++                // Conker: a scripted scene's sprites carry the parked world's depths (see
++                // DrawParams::stereoSceneDepthGrid). While one shows, every frame's depth is
++                // read back so they can take the depth of the picture behind them instead.
++                sceneDepthWanted = false;
++                if (workloadConfig.stereoEnabled) {
++                    for (uint32_t f = 0; (f < workload.fbPairCount) && !sceneDepthWanted; f++) {
++                        const FramebufferPair &scriptedPair = workload.fbPairs[f];
++                        for (uint32_t pr = 0; (pr < scriptedPair.projectionCount) && !sceneDepthWanted; pr++) {
++                            const Projection &scriptedProj = scriptedPair.projections[pr];
++                            if (scriptedProj.type != Projection::Type::Rectangle) {
++                                continue;
++                            }
++
++                            for (uint32_t d = 0; d < scriptedProj.gameCallCount; d++) {
++                                const DrawCall &scriptedCall = scriptedProj.gameCalls[d].callDesc;
++                                if (scriptedCall.rectStereoScripted && (scriptedCall.rectStereoInvDepth > 0.0f)) {
++                                    sceneDepthWanted = true;
++                                    break;
++                                }
++                            }
++                        }
++                    }
++                }
++
++                if (!sceneDepthWanted) {
++                    sceneDepthGridValid = false;
++                    sceneDepthGridPendingValid = false;
++                }
++
                  // Detect the color image to interpolate for this workload.
                  RenderTargetKey interpolationTargetKey;
                  int32_t interpolationTargetFbPairIndex = -1;
-@@ -1030,13 +1412,35 @@ namespace RT64 {
+@@ -1030,13 +1477,35 @@ namespace RT64 {
                  // If the same set of counters is used, we wait until the presentation of its targets is finished so the targets are available to use. Waiting is ignored
                  // if the frame counter has never presented anything yet, as it'll only be a valid value if the previous present event actually did something.
                  else if (generateInterpolatedFrames) {
@@ -2974,7 +3039,7 @@ index 5a331aa..9c64095 100644
                  curFrameCounters.skipped = false;
                  curFrameCounters.presented = 0;
                  curFrameCounters.available = 0;
-@@ -1046,7 +1450,10 @@ namespace RT64 {
+@@ -1046,7 +1515,10 @@ namespace RT64 {
                  auto &interpolatedTargets = ext.sharedResources->interpolatedColorTargets;
                  const bool usingMSAA = (ext.sharedResources->renderTargetManager.multisampling.sampleCount > 1);
                  const bool usesHDR = ext.sharedResources->renderTargetManager.usesHDR;
@@ -2986,7 +3051,7 @@ index 5a331aa..9c64095 100644
                  if ((requiredFrames > 0) && (interpolatedTargets.size() < requiredFrames)) {
                      uint32_t previousSize = uint32_t(interpolatedTargets.size());
                      interpolatedTargets.resize(requiredFrames);
-@@ -1061,6 +1468,7 @@ namespace RT64 {
+@@ -1061,6 +1533,7 @@ namespace RT64 {
                  const int64_t maxTimePerFrameMicro = adjustedTimeWindowMicro / displayFrames;
                  bool skippedFrames = false;
                  bool skipWorkloadNow = false;
@@ -2994,7 +3059,7 @@ index 5a331aa..9c64095 100644
                  uint32_t targetIndex = 0;
                  uint32_t framesRendered = 0;
                  int64_t renderTimeTotalMicro = 0;
-@@ -1073,6 +1481,7 @@ namespace RT64 {
+@@ -1073,6 +1546,7 @@ namespace RT64 {
                          if ((currentTimeMicro > expectedTimeMicro) || ((currentTimeMicro + measuredFrameMicro) > adjustedTimeWindowMicro)) {
                              displayTicks += workload.viOriginalRate;
                              skippedFrames = true;
@@ -3002,7 +3067,7 @@ index 5a331aa..9c64095 100644
                              continue;
                          }
                      }
-@@ -1084,8 +1493,9 @@ namespace RT64 {
+@@ -1084,8 +1558,9 @@ namespace RT64 {
                          displayTicks += workload.viOriginalRate;
                          curFrameWeight = std::clamp((workloadConfig.targetRate + displayTicks - logicalTicks) / float(workloadConfig.targetRate), 0.0f, 1.0f);
  
@@ -3014,7 +3079,7 @@ index 5a331aa..9c64095 100644
                              overrideTarget = interpolatedTargets[targetIndex].get();
                              overrideModifier = (targetIndex + 1);
  
-@@ -1117,8 +1527,58 @@ namespace RT64 {
+@@ -1117,8 +1592,66 @@ namespace RT64 {
                      }
  
                      int64_t renderTimeMicro = workloadTimer.elapsedMicroseconds();
@@ -3025,6 +3090,14 @@ index 5a331aa..9c64095 100644
 +                        // always share it.
 +                        workloadConfig.stereoConvergence = stereoAutoConvergence.applied();
 +                        workloadConfig.stereoFocusDepth = stereoAutoConvergence.focusDepth();
++
++                        // Conker: the scripted scenes' depth grid the last display frame read
++                        // back becomes the one this frame's eyes use.
++                        if (sceneDepthGridPendingValid) {
++                            sceneDepthGrid.swap(sceneDepthGridPending);
++                            sceneDepthGridValid = true;
++                            sceneDepthGridPendingValid = false;
++                        }
 +
 +                        // Conker: render each eye in its own target. The second eye uses the
 +                        // same interpolated frame weights, so both show the same instant. The
@@ -3075,7 +3148,7 @@ index 5a331aa..9c64095 100644
  
                      // Add total time the frame took to render.
                      renderTimeTotalMicro += workloadTimer.elapsedMicroseconds() - renderTimeMicro;
-@@ -1129,7 +1589,7 @@ namespace RT64 {
+@@ -1129,7 +1662,7 @@ namespace RT64 {
                      }
  
                      // For every additional frame, we increase the frames available and notify the present queue.
@@ -3084,7 +3157,7 @@ index 5a331aa..9c64095 100644
                          {
                              std::scoped_lock<std::mutex> cursorLock(cursorMutex);
                              skipWorkloadNow = ((frame + 1) < displayFrames) && (writeCursor != threadCursor);
-@@ -1152,6 +1612,10 @@ namespace RT64 {
+@@ -1152,6 +1685,10 @@ namespace RT64 {
                      framesRendered++;
                  }
  
@@ -3096,7 +3169,7 @@ index 5a331aa..9c64095 100644
                  if (skippedFrames && !skipWorkloadNow) {
                      {
 diff --git a/src/hle/rt64_workload_queue.h b/src/hle/rt64_workload_queue.h
-index bde2f03..4ba8e8c 100644
+index bde2f03..414a892 100644
 --- a/src/hle/rt64_workload_queue.h
 +++ b/src/hle/rt64_workload_queue.h
 @@ -12,6 +12,7 @@
@@ -3131,7 +3204,7 @@ index bde2f03..4ba8e8c 100644
          };
  
          External ext;
-@@ -92,6 +110,25 @@ namespace RT64 {
+@@ -92,6 +110,36 @@ namespace RT64 {
          std::unique_ptr<VertexProcessor> vertexProcessor;
          std::unique_ptr<RenderTarget> dummyDepthTarget;
          std::unique_ptr<RenderQueryPool> queryPool;
@@ -3145,6 +3218,17 @@ index bde2f03..4ba8e8c 100644
 +        StereoAutoConvergence stereoAutoConvergence;
 +        float autoConvergencePendingNear = 0.0f;
 +        float autoConvergencePendingMedian = 0.0f;
++        // Conker: the scripted scenes' depth grid (see DrawParams::stereoSceneDepthGrid).
++        // While a game frame draws scripted sprites (sceneDepthWanted), every display
++        // frame's depth is read back into the pending grid; the next display frame
++        // makes it the current one, so both eyes of a pair use the same grid.
++        static constexpr uint32_t SceneDepthGridWidth = 64;
++        static constexpr uint32_t SceneDepthGridHeight = 36;
++        bool sceneDepthWanted = false;
++        std::vector<float> sceneDepthGridPending;
++        std::vector<float> sceneDepthGrid;
++        bool sceneDepthGridPendingValid = false;
++        bool sceneDepthGridValid = false;
 +        bool stereoCameraValid = false;
 +        hlslpp::float4x4 stereoCameraView;
 +        hlslpp::float4x4 stereoCameraProj;
@@ -3157,7 +3241,7 @@ index bde2f03..4ba8e8c 100644
          FramebufferChangePool scratchFbChangePool;
          ProfilingTimer rendererCPUProfiler = ProfilingTimer(120);
          ProfilingTimer rendererGPUProfiler = ProfilingTimer(120);
-@@ -116,7 +153,14 @@ namespace RT64 {
+@@ -116,7 +164,14 @@ namespace RT64 {
          void threadRenderFrame(GameFrame &curFrame, const GameFrame &prevFrame, const WorkloadConfiguration &workloadConfig,
              const DebuggerRenderer &debuggerRenderer, const DebuggerCamera &debuggerCamera, float curFrameWeight, float prevFrameWeight,
              float deltaTimeMs, RenderTargetKey overrideTargetKey, int32_t overrideTargetFbPairIndex, RenderTarget *overrideTarget,
@@ -3197,16 +3281,18 @@ index 69a82ac..31f6122 100644
              builder.end();
  
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..a27de32 100644
+index 9fae0d4..7e96ca0 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
-@@ -4,9 +4,14 @@
+@@ -4,9 +4,16 @@
  
  #include "rt64_framebuffer_renderer.h"
  
 +#include <algorithm>
 +#include <cfloat>
 +#include <cmath>
++#include <cstdio>
++#include <cstdlib>
 +
  #include "../include/rt64_extended_gbi.h"
  
@@ -3215,7 +3301,46 @@ index 9fae0d4..a27de32 100644
  #include "common/rt64_math.h"
  #include "hle/rt64_color_converter.h"
  #include "gbi/rt64_f3d.h"
-@@ -1435,6 +1440,16 @@ namespace RT64 {
+@@ -138,6 +145,38 @@ namespace RT64 {
+ 
+     RasterScene::RasterScene() { }
+ 
++    // Conker: the picture's depth at (u, v) (0..1 across the frame) from a scripted scene's
++    // depth grid (DrawParams::stereoSceneDepthGrid): the cell there, or the nearest cells
++    // around it that have geometry, up to a few cells away, so a sprite over empty
++    // background takes the depth of what it is next to. 0 when there is none.
++    static float stereoSceneDepthAt(const float *grid, uint32_t gridWidth, uint32_t gridHeight, float u, float v) {
++        const int32_t cx = std::clamp(int32_t(u * float(gridWidth)), 0, int32_t(gridWidth) - 1);
++        const int32_t cy = std::clamp(int32_t(v * float(gridHeight)), 0, int32_t(gridHeight) - 1);
++        const int32_t MaxRing = 6;
++        for (int32_t ring = 0; ring <= MaxRing; ring++) {
++            float nearest = 0.0f;
++            for (int32_t y = cy - ring; y <= cy + ring; y++) {
++                for (int32_t x = cx - ring; x <= cx + ring; x++) {
++                    const bool onRing = (std::abs(x - cx) == ring) || (std::abs(y - cy) == ring);
++                    if (!onRing || (x < 0) || (y < 0) || (x >= int32_t(gridWidth)) || (y >= int32_t(gridHeight))) {
++                        continue;
++                    }
++
++                    const float depth = grid[size_t(y) * gridWidth + size_t(x)];
++                    if ((depth > 0.0f) && ((nearest == 0.0f) || (depth < nearest))) {
++                        nearest = depth;
++                    }
++                }
++            }
++
++            if (nearest > 0.0f) {
++                return nearest;
++            }
++        }
++
++        return 0.0f;
++    }
++
+     // FramebufferRenderer
+     
+     FramebufferRenderer::FramebufferRenderer(RenderWorker *worker, bool rtSupport, UserConfiguration::GraphicsAPI graphicsAPI, const ShaderLibrary *shaderLibrary) {
+@@ -1435,6 +1474,16 @@ namespace RT64 {
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
          const float aspectRatioScale = adjustRatio ? (p.aspectRatioTarget / p.aspectRatioSource) : 1.0f;
@@ -3232,7 +3357,7 @@ index 9fae0d4..a27de32 100644
          InstanceDrawCall instanceDrawCall;
          interop::RenderIndices renderIndices;
          uint32_t globalCallIndex = 0;
-@@ -1488,9 +1503,17 @@ namespace RT64 {
+@@ -1488,9 +1537,17 @@ namespace RT64 {
                  // The call's scissor spans the whole width of the framebuffer pair scissor. Custom origin must not be in use to be able to use the stretched viewport.
                  const auto &viewport = drawData.rspViewports[proj.transformsIndex];
                  FixedRect intersectionRect = proj.scissorRect.intersection(viewport.rect(viewportClipRatios));
@@ -3251,7 +3376,7 @@ index 9fae0d4..a27de32 100644
                  if (useWideViewport) {
                      projInvRatioScale = 1.0f;
                  }
-@@ -1506,6 +1529,15 @@ namespace RT64 {
+@@ -1506,6 +1563,15 @@ namespace RT64 {
                  viewportClip = convertViewportRect(viewport.rect(viewportClipRatios), p.resolutionScale, p.fbWidth, projInvRatioScale, extOriginPercentage, 0.0f, viewportOrigin, viewportOrigin);
              }
  
@@ -3267,7 +3392,7 @@ index 9fae0d4..a27de32 100644
              for (uint32_t d = 0; (d < proj.gameCallCount) && (globalCallIndex < p.maxGameCall); d++) {
                  const GameCall &call = proj.gameCalls[d];
                  renderIndices.instanceIndex = call.callDesc.callIndex;
-@@ -1625,6 +1657,7 @@ namespace RT64 {
+@@ -1625,6 +1691,7 @@ namespace RT64 {
  
                          float invRatioScale = 1.0f / aspectRatioScale;
                          float horizontalMisalignment = 0.0f;
@@ -3275,7 +3400,7 @@ index 9fae0d4..a27de32 100644
                          switch (proj.type) {
                          case Projection::Type::Perspective:
                          case Projection::Type::Orthographic: {
-@@ -1645,14 +1678,83 @@ namespace RT64 {
+@@ -1645,14 +1712,102 @@ namespace RT64 {
                              // The call's scissor spans the whole width of the framebuffer pair scissor. The rect must not be using extended origins.
                              const bool regularOrigins = (call.callDesc.rectLeftOrigin == G_EX_ORIGIN_NONE) && (call.callDesc.rectRightOrigin == G_EX_ORIGIN_NONE);
                              const bool coversScissorWidth = regularOrigins && (call.callDesc.rect.ulx <= fbPair.scissorRect.ulx) && (call.callDesc.rect.lrx >= fbPair.scissorRect.lrx);
@@ -3336,9 +3461,28 @@ index 9fae0d4..a27de32 100644
 +                                // auto-convergence focus is the picture's own depth. Only
 +                                // rects claiming to be beyond twice that focus are clearly
 +                                // the wrong ones: the rest are left alone.
-+                                const bool scriptedFocus = call.callDesc.rectStereoScripted && (p.stereoFocusDepth > 0.0f) &&
++                                // With the scene's depth grid (DrawParams::stereoSceneDepthGrid), a
++                                // scripted rect takes the depth of the picture behind it instead, in
++                                // both directions: its own can claim to be nearer than the scene too.
++                                float sceneDepth = 0.0f;
++                                if (call.callDesc.rectStereoScripted && (p.stereoSceneDepthGrid != nullptr)) {
++                                    const float u = (viewportRect.x + viewportRect.width * 0.5f) / framebuffer.viewport.width;
++                                    const float v = (viewportRect.y + viewportRect.height * 0.5f) / framebuffer.viewport.height;
++                                    sceneDepth = stereoSceneDepthAt(p.stereoSceneDepthGrid, p.stereoSceneDepthGridWidth, p.stereoSceneDepthGridHeight, u, v);
++                                    // TEMP-DEBUG: CONKER_RT64_AUTOCONV_LOG reports the grid's depth
++                                    // taking over a scripted rectangle's own.
++                                    static const bool gridLog = std::getenv("CONKER_RT64_AUTOCONV_LOG") != nullptr;
++                                    static int gridLogCount = 0;
++                                    if (gridLog && (gridLogCount++ < 200)) {
++                                        std::fprintf(stderr, "[RT64] acgrid %.2f,%.2f sprite %.1f scene %.1f\n",
++                                            double(u), double(v), double(1.0f / call.callDesc.rectStereoInvDepth), double(sceneDepth));
++                                    }
++                                }
++
++                                const bool scriptedFocus = (sceneDepth <= 0.0f) && call.callDesc.rectStereoScripted && (p.stereoFocusDepth > 0.0f) &&
 +                                    (call.callDesc.rectStereoInvDepth < 1.0f / (p.stereoFocusDepth * 2.0f));
-+                                const float invDepth = scriptedFocus ? (1.0f / p.stereoFocusDepth) : call.callDesc.rectStereoInvDepth;
++                                const float invDepth = (sceneDepth > 0.0f) ? (1.0f / sceneDepth) :
++                                    (scriptedFocus ? (1.0f / p.stereoFocusDepth) : call.callDesc.rectStereoInvDepth);
 +                                // TEMP-DEBUG: CONKER_RT64_AUTOCONV_LOG reports the scripted
 +                                // focus taking over a rectangle's depth.
 +                                {
@@ -3360,7 +3504,7 @@ index 9fae0d4..a27de32 100644
                              triangles.screenScale = { viewportRect.width / framebuffer.viewport.width, viewportRect.height / framebuffer.viewport.height };
                              triangles.screenOffset.x = halfPixelOffset.x + ((viewportRect.x + viewportRect.width / 2.0f) - halfViewportSize.x) / halfViewportSize.x;
                              triangles.screenOffset.y = halfPixelOffset.y + (halfViewportSize.y - (viewportRect.y + viewportRect.height / 2.0f)) / halfViewportSize.y;
-@@ -1676,7 +1778,47 @@ namespace RT64 {
+@@ -1676,7 +1831,47 @@ namespace RT64 {
                              break;
                          }
  
@@ -3410,10 +3554,10 @@ index 9fae0d4..a27de32 100644
                          bool usesViewport = (proj.type == Projection::Type::Perspective) || (proj.type == Projection::Type::Orthographic);
                          if (usesViewport) {
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..7b5a8e8 100644
+index 3add9c3..2aa0e43 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
-@@ -147,6 +147,23 @@ namespace RT64 {
+@@ -147,6 +147,32 @@ namespace RT64 {
              bool postBlendNoise;
              bool postBlendNoiseNegative;
              uint32_t maxGameCall;
@@ -3425,6 +3569,15 @@ index 3add9c3..7b5a8e8 100644
 +            // Conker: the auto-convergence loop's focus distance (world units, 0 when it
 +            // has none). Rectangles of scripted scenes use it instead of their own depth.
 +            float stereoFocusDepth = 0.0f;
++            // Conker: a scripted scene's depth (the opening sequence, where the game's
++            // sprites carry the depths of a parked world, not of the picture): the nearest
++            // view depth of the last display frame in a coarse grid over the frame, 0 in
++            // cells with nothing drawn. A scripted sprite takes the depth under its middle,
++            // or of the nearest geometry beside it, so smoke sits with what it rises from.
++            // Null outside scripted scenes (and on their first frame).
++            const float *stereoSceneDepthGrid = nullptr;
++            uint32_t stereoSceneDepthGridWidth = 0;
++            uint32_t stereoSceneDepthGridHeight = 0;
 +            // Conker: HUD depth. The 2D layer (rectangles without a sprite depth and
 +            // orthographic triangles) of the displayed image's pairs (stereoHudPair) is
 +            // given a fixed parallax of stereoHudDepth times the separation: positive
