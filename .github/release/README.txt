@@ -1,6 +1,6 @@
 Conker's Bad Fur Day 3D Stereo
 https://github.com/agrofubris/conker-3d-stereo
-A community 3D build of Conker's Bad Fur Day: Recompiled,
+3D edition by agrofubris of Conker's Bad Fur Day: Recompiled,
 https://github.com/sciaschi/CBFD-Recompiled
 macOS port by nitrostemp: https://github.com/nitrostemp
 

@@ -2,7 +2,8 @@
 
 **Conker's Bad Fur Day** (N64, 2001) playable on PC in stereoscopic 3D:
 side-by-side, top-and-bottom, cross-view, interlaced (normal and reversed), and
-Leia SR lenticular panels. It's a community build of sciaschi's native port,
+Leia SR lenticular panels. It's [agrofubris](https://github.com/agrofubris)'s
+3D edition of sciaschi's native port,
 [CBFD-Recompiled](https://github.com/sciaschi/CBFD-Recompiled), with a true
 per-eye renderer: each eye gets its own camera, not a shifted copy of a flat
 picture. The optional Leia SR loader ships in the zip; without the SR Platform
@@ -115,19 +116,30 @@ welcome in the [issues](https://github.com/agrofubris/conker-3d-stereo/issues).
 
 ## 3D credits
 
+The port:
+
 - **sciaschi** and contributors — [CBFD-Recompiled](https://github.com/sciaschi/CBFD-Recompiled),
   the port this build is based on (see [Credits](#credits) below for everything
   it builds on).
+
+The 3D edition:
+
+- **[agrofubris](https://github.com/agrofubris)** — the stereoscopic 3D: the
+  per-eye renderer, the sprite, shadow and HUD depth, Auto Convergence, the 3D
+  settings and the Leia SR output; direction, testing and review.
 - **oneup03** — [RT64 3D](https://github.com/oneup03/rt64-3D), whose stereo
   rendering and Leia SR implementation this follows, and testing and feedback.
 - **bo3b** — [SR-lib](https://github.com/bo3b/SR-lib), the Simulated Reality
   wrapper used for the optional D3D12 weave.
 - The Leia SR loader follows the Leia work of kandowontu2 and agrofubris in
   their other ports.
+- **Claude** (Anthropic), through Claude Code — code, debugging and
+  documentation, under agrofubris's direction.
 
 Licence: MIT, the same as the port (see [LICENSE](LICENSE)), covering the code
-only: it grants no rights in the game or its data. Conker's Bad Fur Day is © Rare
-Ltd.; this project is not affiliated with Rare, Microsoft, Nintendo or Leia.
+only: it grants no rights in the game or its data. The 3D edition's changes are
+© 2026 agrofubris, under the same licence. Conker's Bad Fur Day is © Rare Ltd.;
+this project is not affiliated with Rare, Microsoft, Nintendo or Leia.
 
 ---
 
