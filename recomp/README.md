@@ -704,10 +704,17 @@ keyhole) renders through a camera of its own while the played camera and the wor
 objects sit parked, and the game's screen-space sprites keep that parked world's depths
 (~1/160-1/180, the parked camera-to-player distance) while the picture on screen sits at
 ~40. The host notices the mode and tells RT64 (`G_EX_SETSTEREOSCRIPTED_V1`, sent along
-with the stereo camera's tagging); a sprite whose own depth then claims to be more than
-twice the auto-convergence focus is given the focus instead, so its smoke and shadows
-pop with the picture around them. Sprites claiming plausible depths are left alone, and
-gameplay (mode 0x1D) never sets the flag. `CONKER_STEREO_SCRIPTED_LOG=1` prints it.
+with the stereo camera's tagging). While a frame draws such sprites, RT64 reads every
+frame's depth back (the auto-convergence readback, whether or not Auto Convergence is
+on) into a 64x36 grid of the nearest view depth per cell, swapped in at the start of the
+next display frame so both eyes use the same one (`DrawParams::stereoSceneDepthGrid`).
+A scripted sprite takes the depth under its middle, or over empty background the
+nearest geometry within six cells, so the smoke sits with the chainsaw it rises from
+instead of at the parked world's depth (or, before this, pinned to the scene's nearest
+geometry in front of everything). Without a grid yet (a scene's first frame), a sprite
+claiming more than twice the auto-convergence focus is given the focus, as before.
+Gameplay (mode 0x1D) never sets the flag. `CONKER_STEREO_SCRIPTED_LOG=1` prints it, and
+`CONKER_RT64_AUTOCONV_LOG=1` prints each grid lookup (`acgrid`).
 
 MSAA and stereo
 don't mix yet (both eyes would draw into the same multisampled target), so
