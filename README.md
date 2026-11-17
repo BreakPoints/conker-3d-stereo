@@ -8,11 +8,31 @@ per-eye renderer: each eye gets its own camera, not a shifted copy of a flat
 picture. The optional Leia SR loader ships in the zip; without the SR Platform
 installed the mode falls back to side-by-side.
 
-<!-- Screenshot: docs/screenshot-sbs.png (side-by-side, gameplay) goes here. -->
+![Outside the Cock and Plucker in the rain, side-by-side 3D](docs/screenshots/cock-and-plucker-rain-sbs.jpg)
 
+*Outside the Cock and Plucker. Full side by side, left eye on the left: view it
+on a 3D display, in a VR viewer, or with the parallel free-viewing method. More
+[below](#screenshots).*
+
+> [!NOTE]
 > **Unofficial fan project.** Not affiliated with or endorsed by Rare, Microsoft,
 > Nintendo or Leia. No game data is included or distributed: you need your own
 > US ROM of the game. See [3D credits](#3d-credits).
+
+> [!IMPORTANT]
+> **Made almost entirely with AI.** Nearly all of the 3D code, debugging and
+> documentation in this build is written by an AI (Anthropic's Claude, through
+> Claude Code), directed, tested and reviewed by a human, agrofubris. If you
+> don't trust code written by AI, you can simply ignore this project. As with
+> anything on the internet, you run it at your own discretion.
+
+## Screenshots
+
+Full side by side, left eye on the left. Captured at 15 % separation with Auto
+Convergence on.
+
+![Birdy the scarecrow and a B pad in Hungover, side-by-side 3D](docs/screenshots/hungover-birdy-sbs.jpg)
+![Conker and the Rareware logo at start-up, side-by-side 3D](docs/screenshots/rareware-logo-sbs.jpg)
 
 ## Play in 3 steps (Windows)
 
@@ -88,6 +108,10 @@ side-by-side pair, to tell a weave problem apart from everything else.
 - 3D builds are Windows only for now. The code builds on Linux and macOS as the
   regular port does (Leia SR is Windows only), but those builds haven't been
   tried in 3D. On macOS, Auto Convergence keeps the slider's convergence.
+
+**Tested** on an NVIDIA GeForce RTX 3080, on both D3D12 and Vulkan. **Not tested
+yet:** AMD and Intel graphics cards, and a real Leia SR panel. Reports are very
+welcome in the [issues](https://github.com/agrofubris/conker-3d-stereo/issues).
 
 ## 3D credits
 
