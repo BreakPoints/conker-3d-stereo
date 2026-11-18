@@ -306,13 +306,19 @@ a quarter of the texture.
 
 The patch adds stereo modes: side-by-side, cross-eye (the swapped side-by-side),
 top-and-bottom (over/under: the left eye on the top half), interlaced and
-interlaced reversed. They're in the launcher's Graphics tab (**3D
+interlaced reversed, and full side-by-side. In full side-by-side the eyes are
+rendered at the shape of half the window (the Expand aspect ratio takes half the
+swap chain's width, `rt64_workload_queue.cpp`) and presented with the VI
+renderer's full pair, the layout LeiaSR composes for its weaver: each half a
+whole presentation of its eye. Menus are laid out at half the window's width
+and shown as they are in both halves (`RenderHookUILayout::SideBySideFull`,
+which maps the mouse per half). They're in the launcher's Graphics tab (**3D
 Stereo**, **Stereo Separation**, **Stereo Convergence**), through a key added to
 `GraphicsConfig` (`ultramodern/config.hpp`, `n64modernruntime.patch`) and to
 RecompFrontend's graphics tab and RT64 mapping (`recompfrontend.patch`). The
 environment still overrides them, which is handy for scripted tests:
-`CONKER_STEREO_MODE` is `off`, `sbs`, `xview`, `tab`, `interlaced` or
-`interlaced_reversed`; `RT64_STEREO_*` works too.
+`CONKER_STEREO_MODE` is `off`, `sbs`, `sbsfull`, `xview`, `tab`, `interlaced`
+or `interlaced_reversed`; `RT64_STEREO_*` works too.
 
 The renderer uses the **clip-space separation** parameterization (as in
 3Dmigoto/SuperDepth3D): `stereoSeparation` is the background disparity as a

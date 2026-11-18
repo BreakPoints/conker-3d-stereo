@@ -26,8 +26,8 @@ Settings > Privacy & Security choose Open Anyway. Or, in Terminal, run
 xattr -dr com.apple.quarantine ConkerRecomp.app before opening it.
 
 3D
-  Settings > Graphics > 3D Stereo turns on stereoscopic 3D: side by side,
-  cross-eye, top and bottom, interlaced (line by line, for passive 3D TVs and
+  Settings > Graphics > 3D Stereo turns on stereoscopic 3D: side by side
+  (half, or full for 32:9 windows and VR viewers set to full SBS), cross-eye, top and bottom, interlaced (line by line, for passive 3D TVs and
   monitors) or Leia SR (glasses-free, Windows only). Separation sets how strong
   the depth is, Convergence what sits on the screen plane, HUD Depth where the
   HUD floats, and 3D Gamma brightens the picture for 3D glasses. Anti-aliasing

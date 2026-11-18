@@ -372,10 +372,10 @@ index 0000000..c0800aa
 +    };
 +};
 diff --git a/src/common/rt64_user_configuration.cpp b/src/common/rt64_user_configuration.cpp
-index cc35442..f05f584 100644
+index cc35442..e97501e 100644
 --- a/src/common/rt64_user_configuration.cpp
 +++ b/src/common/rt64_user_configuration.cpp
-@@ -4,11 +4,70 @@
+@@ -4,11 +4,73 @@
  
  #include "rt64_user_configuration.h"
  
@@ -408,6 +408,9 @@ index cc35442..f05f584 100644
 +            else if ((std::strcmp(mode, "sbs") == 0) || (std::strcmp(mode, "sidebyside") == 0)) {
 +                cfg.stereoMode = UserConfiguration::StereoMode::SideBySide;
 +            }
++            else if ((std::strcmp(mode, "sbsfull") == 0) || (std::strcmp(mode, "fullsbs") == 0) || (std::strcmp(mode, "fsbs") == 0)) {
++                cfg.stereoMode = UserConfiguration::StereoMode::SideBySideFull;
++            }
 +            else if ((std::strcmp(mode, "xview") == 0) || (std::strcmp(mode, "crosseye") == 0)) {
 +                cfg.stereoMode = UserConfiguration::StereoMode::CrossEye;
 +            }
@@ -424,7 +427,7 @@ index cc35442..f05f584 100644
 +                cfg.stereoMode = UserConfiguration::StereoMode::LeiaSR;
 +            }
 +            else {
-+                std::fprintf(stderr, "[RT64] Unknown stereo mode '%s': expected off, sbs, xview, interlaced, interlaced_reversed, tab or leiasr.\n", mode);
++                std::fprintf(stderr, "[RT64] Unknown stereo mode '%s': expected off, sbs, sbsfull, xview, interlaced, interlaced_reversed, tab or leiasr.\n", mode);
 +            }
 +
 +            const char *separation = environment_variable("STEREO_SEPARATION");
@@ -446,7 +449,7 @@ index cc35442..f05f584 100644
      void to_json(json &j, const UserConfiguration &cfg) {
          j["graphicsAPI"] = cfg.graphicsAPI;
          j["resolution"] = cfg.resolution;
-@@ -29,6 +88,12 @@ namespace RT64 {
+@@ -29,6 +91,12 @@ namespace RT64 {
          j["hardwareResolve"] = cfg.hardwareResolve;
          j["idleWorkActive"] = cfg.idleWorkActive;
          j["developerMode"] = cfg.developerMode;
@@ -459,7 +462,7 @@ index cc35442..f05f584 100644
      }
  
      void from_json(const json &j, UserConfiguration &cfg) {
-@@ -52,6 +117,12 @@ namespace RT64 {
+@@ -52,6 +120,12 @@ namespace RT64 {
          cfg.hardwareResolve = j.value("hardwareResolve", defaultCfg.hardwareResolve);
          cfg.idleWorkActive = j.value("idleWorkActive", defaultCfg.idleWorkActive);
          cfg.developerMode = j.value("developerMode", defaultCfg.developerMode);
@@ -472,7 +475,7 @@ index cc35442..f05f584 100644
      }
  
      template <typename T>
-@@ -83,6 +154,21 @@ namespace RT64 {
+@@ -83,6 +157,21 @@ namespace RT64 {
          hardwareResolve = HardwareResolve::Automatic;
          idleWorkActive = true;
          developerMode = false;
@@ -494,7 +497,7 @@ index cc35442..f05f584 100644
      }
  
      void UserConfiguration::validate() {
-@@ -97,11 +183,17 @@ namespace RT64 {
+@@ -97,11 +186,17 @@ namespace RT64 {
          clampEnum<RefreshRate>(refreshRate);
          clampEnum<InternalColorFormat>(internalColorFormat);
          clampEnum<HardwareResolve>(hardwareResolve);
@@ -513,10 +516,10 @@ index cc35442..f05f584 100644
          if (!isGraphicsAPISupported(graphicsAPI)) {
              graphicsAPI = GraphicsAPI::Automatic;
 diff --git a/src/common/rt64_user_configuration.h b/src/common/rt64_user_configuration.h
-index 4857f22..26b8b0d 100644
+index 4857f22..ef6cde5 100644
 --- a/src/common/rt64_user_configuration.h
 +++ b/src/common/rt64_user_configuration.h
-@@ -83,6 +83,23 @@ namespace RT64 {
+@@ -83,6 +83,27 @@ namespace RT64 {
              OptionCount
          };
  
@@ -534,13 +537,17 @@ index 4857f22..26b8b0d 100644
 +            InterlacedReversed,
 +            TopAndBottom,
 +            LeiaSR,
++            // Conker: full side by side. Each eye is rendered at the shape of half the
++            // window and fills its half as it is (a 3840 x 1080 window gives two 16:9
++            // eyes), the layout of LeiaSR's woven pair, for 32:9 displays and VR viewers.
++            SideBySideFull,
 +            OptionCount
 +        };
 +
          GraphicsAPI graphicsAPI;
          Resolution resolution;
          DisplayBuffering displayBuffering;
-@@ -103,8 +120,32 @@ namespace RT64 {
+@@ -103,8 +124,32 @@ namespace RT64 {
          bool idleWorkActive;
          bool developerMode;
  
@@ -573,7 +580,7 @@ index 4857f22..26b8b0d 100644
          uint32_t msaaSampleCount() const;
          static uint32_t msaaSampleCount(Antialiasing antialiasing);
          static bool isGraphicsAPISupported(GraphicsAPI graphicsAPI);
-@@ -170,6 +211,16 @@ namespace RT64 {
+@@ -170,6 +215,17 @@ namespace RT64 {
          { UserConfiguration::HardwareResolve::Automatic, "Automatic" }
      });
  
@@ -584,7 +591,8 @@ index 4857f22..26b8b0d 100644
 +        { UserConfiguration::StereoMode::Interlaced, "Interlaced" },
 +        { UserConfiguration::StereoMode::InterlacedReversed, "InterlacedReversed" },
 +        { UserConfiguration::StereoMode::TopAndBottom, "TopAndBottom" },
-+        { UserConfiguration::StereoMode::LeiaSR, "LeiaSR" }
++        { UserConfiguration::StereoMode::LeiaSR, "LeiaSR" },
++        { UserConfiguration::StereoMode::SideBySideFull, "SideBySideFull" }
 +    });
 +
      struct ConfigurationJSON {
@@ -1247,7 +1255,7 @@ index 87392d0..fb20d9e 100644
              const std::vector<float> &prevTcFloats = prevWorkload.drawData.tcFloats;
              std::vector<float> &curVelFloats = curWorkload.drawData.tcVelFloats;
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 7de5b69..155a0e5 100644
+index 7de5b69..fcf44ed 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
 @@ -4,11 +4,25 @@
@@ -1389,7 +1397,7 @@ index 7de5b69..155a0e5 100644
              }
  
              if (presentFrame && swapChainValid) {
-@@ -339,18 +409,80 @@ namespace RT64 {
+@@ -339,18 +409,94 @@ namespace RT64 {
                          renderParams.textureWidth = colorTarget->width;
                          renderParams.textureHeight = colorTarget->height;
                      }
@@ -1408,8 +1416,17 @@ index 7de5b69..155a0e5 100644
 +                        // Conker: LeiaSR presents through the weaver, which consumes the
 +                        // side-by-side pair; its direct present (the fallback when the SR
 +                        // runtime or display isn't available) is a plain side-by-side one.
-+                        renderParams.stereoMode = int32_t((stereoMode == UserConfiguration::StereoMode::LeiaSR)
++                        renderParams.stereoMode = int32_t(((stereoMode == UserConfiguration::StereoMode::LeiaSR) || (stereoMode == UserConfiguration::StereoMode::SideBySideFull))
 +                            ? UserConfiguration::StereoMode::SideBySide : stereoMode);
++
++                        // Conker: full side by side is the VI renderer's full pair (LeiaSR's
++                        // compose) drawn straight onto the swap chain: each half a whole
++                        // presentation of its eye, rendered at that half's shape.
++                        if (stereoMode == UserConfiguration::StereoMode::SideBySideFull) {
++                            renderParams.fillFullTarget = true;
++                            renderParams.targetWidth = ext.swapChain->getWidth();
++                            renderParams.targetHeight = ext.swapChain->getHeight();
++                        }
 +                        renderParams.outputGamma = stereoGamma;
 +
 +                        // Conker: the interlaced modes pick each eye's rows by screen row.
@@ -1454,7 +1471,12 @@ index 7de5b69..155a0e5 100644
 +                RenderHookUILayout uiLayout = RenderHookUILayout::Whole;
 +                if (!presented && halvedStereo && (drawHook != nullptr)) {
 +                    presented = stereoUIPresent(renderParams, swapChainFramebuffer, uiDrawn);
-+                    uiLayout = (renderParams.stereoMode == int32_t(UserConfiguration::StereoMode::TopAndBottom)) ? RenderHookUILayout::TopAndBottom : RenderHookUILayout::SideBySide;
++                    if (renderParams.fillFullTarget) {
++                        uiLayout = RenderHookUILayout::SideBySideFull;
++                    }
++                    else {
++                        uiLayout = (renderParams.stereoMode == int32_t(UserConfiguration::StereoMode::TopAndBottom)) ? RenderHookUILayout::TopAndBottom : RenderHookUILayout::SideBySide;
++                    }
 +                }
 +
 +                // The UI maps the mouse with the layout it was last shown in.
@@ -1475,7 +1497,7 @@ index 7de5b69..155a0e5 100644
                      drawHook(commandList, swapChainFramebuffer);
                  }
  
-@@ -366,7 +498,9 @@ namespace RT64 {
+@@ -366,7 +512,9 @@ namespace RT64 {
                      RenderCommandSemaphore *waitSemaphore = acquiredSemaphore.get();
                      RenderCommandSemaphore *signalSemaphore = drawSemaphores[swapChainIndex].get();
                      ext.presentGraphicsWorker->commandQueue->executeCommandLists(&commandList, 1, &waitSemaphore, 1, &signalSemaphore, 1, ext.presentGraphicsWorker->commandFence.get());
@@ -1485,7 +1507,7 @@ index 7de5b69..155a0e5 100644
                  }
              }
  
-@@ -391,6 +525,7 @@ namespace RT64 {
+@@ -391,6 +539,7 @@ namespace RT64 {
  
              if (presentFrame && swapChainValid) {
                  // Wait until the approximate time the next present should be at the current intended rate.
@@ -1493,7 +1515,7 @@ index 7de5b69..155a0e5 100644
                  if ((presentTimestamp != Timestamp()) && (targetRate > 0) && (targetRate > viOriginalRate)) {
                      Timer::preciseSleepUntil(presentTimestamp + std::chrono::nanoseconds(1'000'000'000 / targetRate));
                  }
-@@ -399,12 +534,259 @@ namespace RT64 {
+@@ -399,12 +548,267 @@ namespace RT64 {
                      ext.swapChain->wait();
                  }
  
@@ -1544,8 +1566,8 @@ index 7de5b69..155a0e5 100644
 +            plume::D3D12CommandQueue *d3dQueue = static_cast<plume::D3D12CommandQueue *>(ext.presentGraphicsWorker->commandQueue.get());
 +            if (!leiaSRWeaver.initialize(d3dDevice->d3d, d3dQueue->d3d, static_cast<void *>(ext.appWindow->windowHandle))) {
 +                return false;
-+            }
-+        }
+             }
+         }
 +
 +        RenderCommandList *commandList = ext.presentGraphicsWorker->commandList.get();
 +
@@ -1641,12 +1663,12 @@ index 7de5b69..155a0e5 100644
 +                commandList->copyTextureRegion(
 +                    RenderTextureCopyLocation::Subresource(leiaSRComposeTexture.get()),
 +                    RenderTextureCopyLocation::Subresource(leiaSRUIScratchTexture.get()), panelWidth, 0);
-             }
++            }
 +
 +            // The hook ran (whether or not it drew): the caller must not run it again on the
 +            // swap chain after the weave.
 +            uiDrawn = true;
-         }
++        }
 +
 +        // Hand the pair to the weaver in a shader-readable state and its output as a cleared
 +        // render target, then submit everything so far: the weave, which the DLL submits on
@@ -1703,7 +1725,11 @@ index 7de5b69..155a0e5 100644
 +    bool PresentQueue::stereoUIPresent(const VIRenderer::RenderParams &renderParams, RenderFramebuffer *swapChainFramebuffer, bool &uiDrawn) {
 +        RenderCommandList *commandList = ext.presentGraphicsWorker->commandList.get();
 +        RenderHookDraw *drawHook = GetRenderHookDraw();
-+        const uint32_t width = ext.swapChain->getWidth();
++        // Conker: in full side by side (the full pair) the UI is laid out at half the
++        // window's width, over the left eye at that size, and shown as it is in each half;
++        // otherwise at the window's size, squeezed into each half.
++        const bool fullPair = renderParams.fillFullTarget;
++        const uint32_t width = fullPair ? std::max(ext.swapChain->getWidth() / 2, 1U) : ext.swapChain->getWidth();
 +        const uint32_t height = ext.swapChain->getHeight();
 +        if ((stereoUIScratchTexture == nullptr) || (stereoUIScratchWidth != width) || (stereoUIScratchHeight != height)) {
 +            stereoUIScratchFramebuffer.reset();
@@ -1724,6 +1750,8 @@ index 7de5b69..155a0e5 100644
 +        commandList->setFramebuffer(stereoUIScratchFramebuffer.get());
 +        commandList->clearColor();
 +
++        // With the full pair, a mono draw keeps its half-window viewport (at the left), which
++        // is the whole scratch.
 +        VIRenderer::RenderParams monoParams = renderParams;
 +        monoParams.textureRight = nullptr;
 +        monoParams.stereoMode = 0;
@@ -1748,6 +1776,8 @@ index 7de5b69..155a0e5 100644
 +        blitParams.textureWidth = width;
 +        blitParams.textureHeight = height;
 +        blitParams.blitTexture = true;
++        // The blit's halves are half the window each, so a half-window scratch lands unscaled.
++        blitParams.fillFullTarget = false;
 +        viRenderer->render(blitParams);
 +        return true;
      }
@@ -2362,7 +2392,7 @@ index 2970e71..201f657 100644
                  RenderWorkerExecution execution(ext.framebufferGraphicsWorker);
                  framebufferManager.uploadRAM(ext.framebufferGraphicsWorker, differentFbs.data(), differentFbs.size(), workload.fbChangePool, RDRAM, true, drawFbOperations, drawFbDiscards, ext.shaderLibrary);
 diff --git a/src/hle/rt64_workload_queue.cpp b/src/hle/rt64_workload_queue.cpp
-index 5a331aa..0a83f5e 100644
+index 5a331aa..62bc039 100644
 --- a/src/hle/rt64_workload_queue.cpp
 +++ b/src/hle/rt64_workload_queue.cpp
 @@ -4,6 +4,17 @@
@@ -2383,7 +2413,20 @@ index 5a331aa..0a83f5e 100644
  #include "common/rt64_thread.h"
  
  #include "rt64_present_queue.h"
-@@ -212,6 +223,21 @@ namespace RT64 {
+@@ -137,7 +148,11 @@ namespace RT64 {
+         switch (ratioMode) {
+         case UserConfiguration::AspectRatio::Expand:
+             if ((ext.sharedResources->swapChainWidth > 0) && (ext.sharedResources->swapChainHeight > 0)) {
+-                const float derivedRatioTarget = float(ext.sharedResources->swapChainWidth) / float(ext.sharedResources->swapChainHeight);
++                // Conker: in full side by side each eye gets half of the window, so the
++                // picture takes that half's shape.
++                const bool fullSideBySide = (ext.sharedResources->userConfig.stereoMode == UserConfiguration::StereoMode::SideBySideFull);
++                const uint32_t eyeWindowWidth = fullSideBySide ? std::max(ext.sharedResources->swapChainWidth / 2, 1U) : ext.sharedResources->swapChainWidth;
++                const float derivedRatioTarget = float(eyeWindowWidth) / float(ext.sharedResources->swapChainHeight);
+                 workloadConfig.aspectRatioTarget = std::max(derivedRatioTarget, workloadConfig.aspectRatioSource);
+             }
+             else {
+@@ -212,6 +227,21 @@ namespace RT64 {
          workloadConfig.downsampleMultiplier = ext.sharedResources->userConfig.downsampleMultiplier;
          ext.sharedResources->resolutionScale = workloadConfig.resolutionScale;
  
@@ -2405,7 +2448,7 @@ index 5a331aa..0a83f5e 100644
          // Find the target refresh rate from the configuration.
          const auto refreshRate = ext.sharedResources->userConfig.refreshRate;
          switch (refreshRate) {
-@@ -292,7 +318,8 @@ namespace RT64 {
+@@ -292,7 +322,8 @@ namespace RT64 {
      void WorkloadQueue::threadRenderFrame(GameFrame &curFrame, const GameFrame &prevFrame, const WorkloadConfiguration &workloadConfig,
          const DebuggerRenderer &debuggerRenderer, const DebuggerCamera &debuggerCamera, float curFrameWeight, float prevFrameWeight,
          float deltaTimeMs, RenderTargetKey overrideTargetKey, int32_t overrideTargetFbPairIndex, RenderTarget *overrideTarget,
@@ -2415,7 +2458,7 @@ index 5a331aa..0a83f5e 100644
      {
  #   if ENABLE_HIGH_RESOLUTION_RENDERER
          std::scoped_lock<std::mutex> managerLock(ext.sharedResources->workloadMutex);
-@@ -301,9 +328,13 @@ namespace RT64 {
+@@ -301,9 +332,13 @@ namespace RT64 {
          const bool usingMSAA = (targetManager.multisampling.sampleCount > 1);
  
          rendererCPUProfiler.start();
@@ -2430,7 +2473,7 @@ index 5a331aa..0a83f5e 100644
          bool uploadProjections = false;
          if (processProjections) {
              ProjectionProcessor::ProcessParams projParams;
-@@ -314,12 +345,22 @@ namespace RT64 {
+@@ -314,12 +349,22 @@ namespace RT64 {
              projParams.curFrameWeight = curFrameWeight;
              projParams.prevFrameWeight = prevFrameWeight;
              projParams.aspectRatioScale = workloadConfig.aspectRatioScale;
@@ -2454,7 +2497,7 @@ index 5a331aa..0a83f5e 100644
          bool uploadTransforms = false;
          if (processTransforms) {
              TransformProcessor::ProcessParams transformParams;
-@@ -335,7 +376,7 @@ namespace RT64 {
+@@ -335,7 +380,7 @@ namespace RT64 {
          }
  
          bool uploadTiles = false;
@@ -2463,7 +2506,7 @@ index 5a331aa..0a83f5e 100644
              TileProcessor::ProcessParams tileParams;
              tileParams.worker = ext.workloadGraphicsWorker;
              tileParams.workloadQueue = this;
-@@ -349,7 +390,7 @@ namespace RT64 {
+@@ -349,7 +394,7 @@ namespace RT64 {
          }
  
          bool uploadLookAts = false;
@@ -2472,7 +2515,7 @@ index 5a331aa..0a83f5e 100644
              LookAtProcessor::ProcessParams lookAtParams;
              lookAtParams.worker = ext.workloadGraphicsWorker;
              lookAtParams.workloadQueue = this;
-@@ -449,6 +490,15 @@ namespace RT64 {
+@@ -449,6 +494,15 @@ namespace RT64 {
                          colorFb = &fbManager.get(colorImg.address, colorImg.siz, nativeColorWidth, nativeColorHeight);
                      }
  
@@ -2488,7 +2531,7 @@ index 5a331aa..0a83f5e 100644
                      if (colorFb != nullptr) {
                          fbKey.colorTargetKey = RenderTargetKey(colorFb->addressStart, colorFb->width, colorFb->siz, Framebuffer::Type::Color);
                          colorTarget = &targetManager.get(fbKey.colorTargetKey);
-@@ -508,6 +558,16 @@ namespace RT64 {
+@@ -508,6 +562,16 @@ namespace RT64 {
              colorDepthPairs.clear();
  
              const uint32_t fbPairCount = (debuggerRenderer.framebufferIndex >= 0) ? (debuggerRenderer.framebufferIndex + 1) : workload.fbPairCount;
@@ -2505,7 +2548,7 @@ index 5a331aa..0a83f5e 100644
              for (uint32_t f = 0; f < fbPairCount; f++) {
                  const FramebufferPair &fbPair = workload.fbPairs[f];
  #           if RT_ENABLED
-@@ -538,9 +598,19 @@ namespace RT64 {
+@@ -538,9 +602,19 @@ namespace RT64 {
                          depthFb->nativeTarget.resetBufferHistory();
                      }
  
@@ -2525,7 +2568,7 @@ index 5a331aa..0a83f5e 100644
                      }
  
                      // Set up the dummy target used for rendering the depth if no depth framebuffer is active.
-@@ -566,6 +636,9 @@ namespace RT64 {
+@@ -566,6 +640,9 @@ namespace RT64 {
                          if (depthTarget->resize(ext.workloadGraphicsWorker, rtWidth, rtHeight)) {
                              resizedTargets.emplace(depthTarget);
                              depthFb->readHeight = 0;
@@ -2535,7 +2578,7 @@ index 5a331aa..0a83f5e 100644
                          }
                      }
                  }
-@@ -577,6 +650,10 @@ namespace RT64 {
+@@ -577,6 +654,10 @@ namespace RT64 {
              // Make sure all depth targets are at least bigger than their corresponding color targets.
              for (auto colorDepthPair : colorDepthPairs) {
                  if (colorDepthPair.second->resize(ext.workloadGraphicsWorker, colorDepthPair.first->width, colorDepthPair.first->height)) {
@@ -2546,7 +2589,7 @@ index 5a331aa..0a83f5e 100644
                      resizedTargets.emplace(colorDepthPair.second);
                  }
              }
-@@ -612,9 +689,22 @@ namespace RT64 {
+@@ -612,9 +693,22 @@ namespace RT64 {
              }
  #       endif
  
@@ -2569,7 +2612,7 @@ index 5a331aa..0a83f5e 100644
                      RenderFramebufferStorage &fbStorage = renderFramebufferManager->get(fbKey, colorTarget, (depthTarget != nullptr) ? depthTarget : dummyDepthTarget.get());
                      FramebufferRenderer::DrawParams drawParams;
                      drawParams.worker = ext.workloadGraphicsWorker;
-@@ -639,6 +729,20 @@ namespace RT64 {
+@@ -639,6 +733,20 @@ namespace RT64 {
                      drawParams.postBlendNoise = workloadConfig.postBlendNoise;
                      drawParams.postBlendNoiseNegative = workloadConfig.postBlendNoiseNegative;
                      drawParams.maxGameCall = std::min(gameCallCountMax - gameCallCursor, fbPair.gameCallCount);
@@ -2590,7 +2633,7 @@ index 5a331aa..0a83f5e 100644
                      framebufferRenderer->addFramebuffer(drawParams);
                  }
                  
-@@ -709,6 +813,12 @@ namespace RT64 {
+@@ -709,6 +817,12 @@ namespace RT64 {
              for (uint32_t f = 0; f < fbPairCount; f++) {
                  const FramebufferPair &fbPair = workload.fbPairs[f];
                  bool validTargets = getTargetsFromPair(f);
@@ -2603,7 +2646,7 @@ index 5a331aa..0a83f5e 100644
                  fbManager.recordOperations(ext.workloadGraphicsWorker, &workload.fbChangePool, &workload.fbStorage, ext.shaderLibrary, ext.textureCache,
                      fbPair.startFbOperations, targetManager, fixedResScale, f, workload.submissionFrame);
  
-@@ -738,6 +848,11 @@ namespace RT64 {
+@@ -738,6 +852,11 @@ namespace RT64 {
  
                          if (colorFb->height > colorFb->readHeight) {
                              uint32_t readRowCount = colorFb->height - colorFb->readHeight;
@@ -2615,7 +2658,7 @@ index 5a331aa..0a83f5e 100644
                              FramebufferChange *colorFbChange = colorFb->readChangeFromStorage(ext.workloadGraphicsWorker, workload.fbStorage, scratchFbChangePool,
                                  Framebuffer::Type::Color, colorImg.fmt, f, colorFb->readHeight, readRowCount, ext.shaderLibrary);
  
-@@ -756,10 +871,20 @@ namespace RT64 {
+@@ -756,10 +875,20 @@ namespace RT64 {
                          depthFbTypeChanged = (depthFb->lastWriteType == Framebuffer::Type::Color);
  
                          bool imgFormatChanged = (colorFb == nullptr) ? colorImg.formatChanged : depthImg.formatChanged;
@@ -2636,7 +2679,7 @@ index 5a331aa..0a83f5e 100644
                              RenderTargetKey otherDepthTargetKey(depthFb->addressStart, depthFb->width, depthFb->siz, depthFb->lastWriteType);
                              RenderTarget &otherDepthTarget = targetManager.get(otherDepthTargetKey);
                              if (!otherDepthTarget.isEmpty()) {
-@@ -777,6 +902,10 @@ namespace RT64 {
+@@ -777,6 +906,10 @@ namespace RT64 {
  
                          if (depthFb->height > depthFb->readHeight) {
                              uint32_t readRowCount = depthFb->height - depthFb->readHeight;
@@ -2647,7 +2690,7 @@ index 5a331aa..0a83f5e 100644
                              FramebufferChange *depthFbChange = depthFb->readChangeFromStorage(ext.workloadGraphicsWorker, workload.fbStorage, scratchFbChangePool, Framebuffer::Type::Depth,
                                  G_IM_FMT_DEPTH, f, depthFb->readHeight, readRowCount, ext.shaderLibrary);
  
-@@ -837,17 +966,42 @@ namespace RT64 {
+@@ -837,17 +970,42 @@ namespace RT64 {
                      fbPair.endFbOperations, targetManager, fixedResScale, f, workload.submissionFrame);
              }
  
@@ -2690,7 +2733,7 @@ index 5a331aa..0a83f5e 100644
  
              // Indicate to the texture cache it's safe to delete the textures if no locks are active.
              ext.textureCache->decrementLock();
-@@ -858,12 +1012,239 @@ namespace RT64 {
+@@ -858,12 +1016,239 @@ namespace RT64 {
          }
  
          framebufferRenderer->advanceFrame(workloadConfig.raytracingEnabled);
@@ -2930,7 +2973,7 @@ index 5a331aa..0a83f5e 100644
      void WorkloadQueue::threadAdvanceBarrier() {
          std::scoped_lock<std::mutex> cursorLock(cursorMutex);
          barrierCursor = (barrierCursor + 1) % workloads.size();
-@@ -926,6 +1307,72 @@ namespace RT64 {
+@@ -926,6 +1311,72 @@ namespace RT64 {
                  uint32_t workloadIndex = processCursor;
                  curFrame.set(*this, &workloadIndex, 1);
  
@@ -3003,7 +3046,7 @@ index 5a331aa..0a83f5e 100644
                  // Detect the color image to interpolate for this workload.
                  RenderTargetKey interpolationTargetKey;
                  int32_t interpolationTargetFbPairIndex = -1;
-@@ -1030,13 +1477,35 @@ namespace RT64 {
+@@ -1030,13 +1481,35 @@ namespace RT64 {
                  // If the same set of counters is used, we wait until the presentation of its targets is finished so the targets are available to use. Waiting is ignored
                  // if the frame counter has never presented anything yet, as it'll only be a valid value if the previous present event actually did something.
                  else if (generateInterpolatedFrames) {
@@ -3039,7 +3082,7 @@ index 5a331aa..0a83f5e 100644
                  curFrameCounters.skipped = false;
                  curFrameCounters.presented = 0;
                  curFrameCounters.available = 0;
-@@ -1046,7 +1515,10 @@ namespace RT64 {
+@@ -1046,7 +1519,10 @@ namespace RT64 {
                  auto &interpolatedTargets = ext.sharedResources->interpolatedColorTargets;
                  const bool usingMSAA = (ext.sharedResources->renderTargetManager.multisampling.sampleCount > 1);
                  const bool usesHDR = ext.sharedResources->renderTargetManager.usesHDR;
@@ -3051,7 +3094,7 @@ index 5a331aa..0a83f5e 100644
                  if ((requiredFrames > 0) && (interpolatedTargets.size() < requiredFrames)) {
                      uint32_t previousSize = uint32_t(interpolatedTargets.size());
                      interpolatedTargets.resize(requiredFrames);
-@@ -1061,6 +1533,7 @@ namespace RT64 {
+@@ -1061,6 +1537,7 @@ namespace RT64 {
                  const int64_t maxTimePerFrameMicro = adjustedTimeWindowMicro / displayFrames;
                  bool skippedFrames = false;
                  bool skipWorkloadNow = false;
@@ -3059,7 +3102,7 @@ index 5a331aa..0a83f5e 100644
                  uint32_t targetIndex = 0;
                  uint32_t framesRendered = 0;
                  int64_t renderTimeTotalMicro = 0;
-@@ -1073,6 +1546,7 @@ namespace RT64 {
+@@ -1073,6 +1550,7 @@ namespace RT64 {
                          if ((currentTimeMicro > expectedTimeMicro) || ((currentTimeMicro + measuredFrameMicro) > adjustedTimeWindowMicro)) {
                              displayTicks += workload.viOriginalRate;
                              skippedFrames = true;
@@ -3067,7 +3110,7 @@ index 5a331aa..0a83f5e 100644
                              continue;
                          }
                      }
-@@ -1084,8 +1558,9 @@ namespace RT64 {
+@@ -1084,8 +1562,9 @@ namespace RT64 {
                          displayTicks += workload.viOriginalRate;
                          curFrameWeight = std::clamp((workloadConfig.targetRate + displayTicks - logicalTicks) / float(workloadConfig.targetRate), 0.0f, 1.0f);
  
@@ -3079,7 +3122,7 @@ index 5a331aa..0a83f5e 100644
                              overrideTarget = interpolatedTargets[targetIndex].get();
                              overrideModifier = (targetIndex + 1);
  
-@@ -1117,8 +1592,66 @@ namespace RT64 {
+@@ -1117,8 +1596,66 @@ namespace RT64 {
                      }
  
                      int64_t renderTimeMicro = workloadTimer.elapsedMicroseconds();
@@ -3148,7 +3191,7 @@ index 5a331aa..0a83f5e 100644
  
                      // Add total time the frame took to render.
                      renderTimeTotalMicro += workloadTimer.elapsedMicroseconds() - renderTimeMicro;
-@@ -1129,7 +1662,7 @@ namespace RT64 {
+@@ -1129,7 +1666,7 @@ namespace RT64 {
                      }
  
                      // For every additional frame, we increase the frames available and notify the present queue.
@@ -3157,7 +3200,7 @@ index 5a331aa..0a83f5e 100644
                          {
                              std::scoped_lock<std::mutex> cursorLock(cursorMutex);
                              skipWorkloadNow = ((frame + 1) < displayFrames) && (writeCursor != threadCursor);
-@@ -1152,6 +1685,10 @@ namespace RT64 {
+@@ -1152,6 +1689,10 @@ namespace RT64 {
                      framesRendered++;
                  }
  
@@ -4619,7 +4662,7 @@ index 2e60745..01be99b 100644
          init = init_;
          draw = draw_;
 diff --git a/src/rhi/rt64_render_hooks.h b/src/rhi/rt64_render_hooks.h
-index be01701..6bb7d14 100644
+index be01701..759a2a7 100644
 --- a/src/rhi/rt64_render_hooks.h
 +++ b/src/rhi/rt64_render_hooks.h
 @@ -8,7 +8,10 @@
@@ -4634,7 +4677,7 @@ index be01701..6bb7d14 100644
      using RenderHookDeinit = void();
  
      RenderHookInit *GetRenderHookInit();
-@@ -16,4 +19,16 @@ namespace RT64 {
+@@ -16,4 +19,19 @@ namespace RT64 {
      RenderHookDeinit *GetRenderHookDeinit();
  
      void SetRenderHooks(RenderHookInit *init, RenderHookDraw *draw, RenderHookDeinit *deinit);
@@ -4645,7 +4688,10 @@ index be01701..6bb7d14 100644
 +    enum class RenderHookUILayout {
 +        Whole,
 +        SideBySide,
-+        TopAndBottom
++        TopAndBottom,
++        // Conker: full side by side, the UI laid out at half the window's width and shown
++        // as it is in each half.
++        SideBySideFull
 +    };
 +
 +    RenderHookUILayout GetRenderHookUILayout();
