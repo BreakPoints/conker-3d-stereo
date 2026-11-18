@@ -960,7 +960,7 @@ index 33f79ab..0a3ae42 100644
              uint32_t get_display_framerate() const override;
              float get_resolution_scale() const override;
 diff --git a/recompui/src/base/ui_state.cpp b/recompui/src/base/ui_state.cpp
-index 277a421..35f199a 100644
+index 277a421..48079cd 100644
 --- a/recompui/src/base/ui_state.cpp
 +++ b/recompui/src/base/ui_state.cpp
 @@ -4,6 +4,7 @@
@@ -1023,7 +1023,7 @@ index 277a421..35f199a 100644
          document->Show();
  
          if (!mouse_is_active) {
-@@ -646,13 +684,70 @@ void recompui::activate_mouse() {
+@@ -646,13 +684,78 @@ void recompui::activate_mouse() {
      ui_state->update_focus(true, false);
  }
  
@@ -1037,7 +1037,10 @@ index 277a421..35f199a 100644
 +    const RT64::RenderHookUILayout layout = RT64::GetRenderHookUILayout();
 +    const bool side_by_side = (layout == RT64::RenderHookUILayout::SideBySide);
 +    const bool top_and_bottom = (layout == RT64::RenderHookUILayout::TopAndBottom);
-+    if (!side_by_side && !top_and_bottom) {
++    // Full side by side: the UI is laid out at half the window's width and shown as it is
++    // in each half, so only the half the pointer is in has to be taken out.
++    const bool side_by_side_full = (layout == RT64::RenderHookUILayout::SideBySideFull);
++    if (!side_by_side && !top_and_bottom && !side_by_side_full) {
 +        return;
 +    }
 +
@@ -1079,6 +1082,11 @@ index 277a421..35f199a 100644
 +        *x = (std::min(*x, 2 * half - 1) % half) * 2;
 +    }
 +
++    if (side_by_side_full && (width > 1)) {
++        const int half = width / 2;
++        *x = std::min(*x, 2 * half - 1) % half;
++    }
++
 +    if (top_and_bottom && (height > 1)) {
 +        const int half = height / 2;
 +        *y = (std::min(*y, 2 * half - 1) % half) * 2;
@@ -1096,7 +1104,7 @@ index 277a421..35f199a 100644
      }
  
      // Return to the launcher if no menu is open and the game isn't started.
-@@ -683,6 +778,9 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -683,6 +786,9 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
      bool all_input_is_disabled = recompinput::all_input_disabled();
  
      while (recompui::try_deque_event(cur_event)) {
@@ -1106,7 +1114,7 @@ index 277a421..35f199a 100644
          bool context_capturing_input = recompui::is_context_capturing_input();
          bool context_capturing_mouse = recompui::is_context_capturing_mouse();
  
-@@ -859,7 +957,8 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -859,7 +965,8 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
      ui_state->update_primary_input(mouse_moved, non_mouse_interacted);
      ui_state->update_focus(mouse_moved, non_mouse_interacted);
  
@@ -1116,7 +1124,7 @@ index 277a421..35f199a 100644
          if (recompui::is_context_shown(recompui::get_launcher_context_id())) {
              recompui::update_launcher_menu();
          }
-@@ -887,6 +986,8 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -887,6 +994,8 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
          ui_state->context->Render();
          ui_state->render_interface.end(command_list, swap_chain_framebuffer);
      }
@@ -1862,10 +1870,10 @@ index 296ce0e..193466d 100644
      
      double general::get_joystick_deadzone() {
 diff --git a/recompui/src/config/ui_config_tab_graphics.cpp b/recompui/src/config/ui_config_tab_graphics.cpp
-index 4fdf81f..2c68aa7 100644
+index 4fdf81f..378e4fb 100644
 --- a/recompui/src/config/ui_config_tab_graphics.cpp
 +++ b/recompui/src/config/ui_config_tab_graphics.cpp
-@@ -95,6 +95,19 @@ namespace recompui {
+@@ -95,6 +95,20 @@ namespace recompui {
              {ultramodern::renderer::HUDRatioMode::Full, "Expand"},
          };
  
@@ -1875,6 +1883,7 @@ index 4fdf81f..2c68aa7 100644
 +        static EnumOptionVector stereo_mode_options = {
 +            {ultramodern::renderer::StereoMode::Off, "Off"},
 +            {ultramodern::renderer::StereoMode::SideBySide, "SideBySide", "Side by side"},
++            {ultramodern::renderer::StereoMode::SideBySideFull, "SideBySideFull", "Side by side (full)"},
 +            {ultramodern::renderer::StereoMode::CrossEye, "CrossEye", "Cross-eye (X-view)"},
 +            {ultramodern::renderer::StereoMode::Interlaced, "Interlaced"},
 +            {ultramodern::renderer::StereoMode::InterlacedReversed, "InterlacedReversed", "Interlaced rev."},
@@ -1885,7 +1894,7 @@ index 4fdf81f..2c68aa7 100644
          static const std::string get_downsampling_details(ultramodern::renderer::Resolution res_option, DownsamplingOption ds_option) {
              switch (res_option) {
                  default:
-@@ -177,6 +190,29 @@ namespace recompui {
+@@ -177,6 +191,29 @@ namespace recompui {
  
              new_config.ds_option = get_graphics_enum_value<int>(graphics::options::ds_option);
  
@@ -1915,7 +1924,7 @@ index 4fdf81f..2c68aa7 100644
              ultramodern::renderer::set_graphics_config(new_config);
          }
  
-@@ -359,6 +395,116 @@ namespace recompui {
+@@ -359,6 +396,120 @@ namespace recompui {
                  true
              );
  
@@ -1923,6 +1932,9 @@ index 4fdf81f..2c68aa7 100644
 +                graphics::options::stereo_mode_option,
 +                "3D Stereo",
 +                "Renders the game for stereoscopic displays or glasses: side by side, cross-eye (X-view, the swapped layout) or line-interlaced for 3D TVs. The game's screen-space effects (sparks, smoke) are given their 3D depth, while HUD and menus stay on the screen plane."
++                "<br />"
++                "<br />"
++                "Side by side squeezes each eye into half of the screen, as 3D TVs expect. Side by side (full) gives each eye a whole half of the window at its own shape instead: for a 32:9 window (3840 x 1080, two 16:9 eyes) or a VR viewer set to full SBS."
 +                "<br />"
 +                "<br />"
 +                "Leia SR weaves the two images onto a Simulated Reality (glasses-free) display's lenticular panel when one and its runtime are available; otherwise it presents side by side."
@@ -1940,6 +1952,7 @@ index 4fdf81f..2c68aa7 100644
 +                    graphics::options::msaa_option,
 +                    graphics::options::stereo_mode_option,
 +                    ultramodern::renderer::StereoMode::SideBySide,
++                    ultramodern::renderer::StereoMode::SideBySideFull,
 +                    ultramodern::renderer::StereoMode::CrossEye,
 +                    ultramodern::renderer::StereoMode::Interlaced,
 +                    ultramodern::renderer::StereoMode::InterlacedReversed,
@@ -2156,10 +2169,10 @@ index 2c5dc52..9b175f4 100644
  }
  
 diff --git a/recompui/src/renderer/rt64_render_context.cpp b/recompui/src/renderer/rt64_render_context.cpp
-index a7954c7..bf152db 100644
+index a7954c7..1c9ccd6 100644
 --- a/recompui/src/renderer/rt64_render_context.cpp
 +++ b/recompui/src/renderer/rt64_render_context.cpp
-@@ -138,6 +138,28 @@ RT64::EnhancementConfiguration::Presentation::Mode to_rt64(ultramodern::renderer
+@@ -138,6 +138,30 @@ RT64::EnhancementConfiguration::Presentation::Mode to_rt64(ultramodern::renderer
      }
  }
  
@@ -2168,6 +2181,8 @@ index a7954c7..bf152db 100644
 +    switch (mode) {
 +        case ultramodern::renderer::StereoMode::SideBySide:
 +            return RT64::UserConfiguration::StereoMode::SideBySide;
++        case ultramodern::renderer::StereoMode::SideBySideFull:
++            return RT64::UserConfiguration::StereoMode::SideBySideFull;
 +        case ultramodern::renderer::StereoMode::CrossEye:
 +            return RT64::UserConfiguration::StereoMode::CrossEye;
 +        case ultramodern::renderer::StereoMode::Interlaced:
@@ -2188,7 +2203,7 @@ index a7954c7..bf152db 100644
  void set_application_user_config(RT64::Application* application, const ultramodern::renderer::GraphicsConfig& config) {
      switch (config.res_option) {
          default:
-@@ -177,6 +199,14 @@ void set_application_user_config(RT64::Application* application, const ultramode
+@@ -177,6 +201,14 @@ void set_application_user_config(RT64::Application* application, const ultramode
      application->userConfig.refreshRateTarget = config.rr_manual_value;
      application->userConfig.internalColorFormat = to_rt64(config.hpfb_option);
      application->userConfig.displayBuffering = RT64::UserConfiguration::DisplayBuffering::Triple;
@@ -2203,7 +2218,7 @@ index a7954c7..bf152db 100644
  }
  
  ultramodern::renderer::SetupResult map_setup_result(RT64::Application::SetupResult rt64_result) {
-@@ -360,6 +390,10 @@ void renderer::RT64Context::update_screen() {
+@@ -360,6 +392,10 @@ void renderer::RT64Context::update_screen() {
      app->updateScreen();
  }
  

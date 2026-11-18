@@ -1,8 +1,8 @@
 # Conker's Bad Fur Day 3D Stereo
 
 **Conker's Bad Fur Day** (N64, 2001) playable on PC in stereoscopic 3D:
-side-by-side, top-and-bottom, cross-view, interlaced (normal and reversed), and
-Leia SR lenticular panels. It's [agrofubris](https://github.com/agrofubris)'s
+side-by-side (half and full), top-and-bottom, cross-view, interlaced (normal and
+reversed), and Leia SR lenticular panels. It's [agrofubris](https://github.com/agrofubris)'s
 3D edition of sciaschi's native port,
 [CBFD-Recompiled](https://github.com/sciaschi/CBFD-Recompiled), with a true
 per-eye renderer: each eye gets its own camera, not a shifted copy of a flat
@@ -11,9 +11,9 @@ installed the mode falls back to side-by-side.
 
 ![Outside the Cock and Plucker in the rain, side-by-side 3D](docs/screenshots/cock-and-plucker-rain-sbs.jpg)
 
-*Outside the Cock and Plucker. Full side by side, left eye on the left: view it
-on a 3D display, in a VR viewer, or with the parallel free-viewing method. More
-[below](#screenshots).*
+*Outside the Cock and Plucker. Half side by side, left eye on the left: view it
+on a 3D display, in a VR viewer set to half SBS, or with the parallel
+free-viewing method. More [below](#screenshots).*
 
 > [!NOTE]
 > **Unofficial fan project.** Not affiliated with or endorsed by Rare, Microsoft,
@@ -29,8 +29,8 @@ on a 3D display, in a VR viewer, or with the parallel free-viewing method. More
 
 ## Screenshots
 
-Full side by side, left eye on the left. Captured at 15 % separation with Auto
-Convergence on.
+Half side by side (each eye squeezed into its half), left eye on the left.
+Captured at 1920 x 1080, 15 % separation, with Auto Convergence on.
 
 ![Birdy the scarecrow and a B pad in Hungover, side-by-side 3D](docs/screenshots/hungover-birdy-sbs.jpg)
 ![Conker and the Rareware logo at start-up, side-by-side 3D](docs/screenshots/rareware-logo-sbs.jpg)
@@ -54,14 +54,21 @@ Microsoft's Visual C++ Redistributable (x64).
 | --- | --- |
 | Passive (polarised, row-interlaced) monitor | `Interlaced` or `Interlaced rev.`, whichever gives correct depth with your glasses |
 | 3D TV / projector, side-by-side | `Side by side` |
+| 32:9 window (3840 x 1080), or a VR viewer set to full SBS | `Side by side (full)` |
 | 3D TV / projector, top-and-bottom | `Top and bottom` |
 | Leia SR glasses-free panel | `Leia SR (glasses-free)` |
 | Cross-eye free viewing | `Cross-eye (X-view)` |
 
 Side by side, top and bottom and cross-eye are the half formats: each eye is
 rendered at the screen's shape and squeezed into its half, and the display
-stretches it back. While a menu is open in those modes, the menu is shown flat
-in both halves so it stays readable and clickable.
+stretches it back. **Side by side (full)** gives each eye a whole half of the
+window at its own shape instead: a 3840 x 1080 window shows two full 16:9 eyes.
+While a menu is open in any of these modes, the menu is shown flat in both
+halves so it stays readable and clickable.
+
+In a VR headset's virtual screen, start with a much lower Stereo Separation
+(about 2 %): the screen is huge, so the default 5 % puts distant things further
+apart than your eyes.
 
 ## Depth
 
@@ -174,7 +181,7 @@ yourself instead, read on.
 
 - Runs natively on Windows (Direct3D 12 or Vulkan), Linux (Vulkan) and macOS
   (Metal), rendered by RT64. Supports higher resolutions, widescreen,
-  stereoscopic 3D (side by side, cross-eye, top and bottom, interlaced, and
+  stereoscopic 3D (side by side, half or full, cross-eye, top and bottom, interlaced, and
   Leia SR panels on Windows with Direct3D 12) with automatic convergence,
   anti-aliasing and high frame-rate presentation, with Conker, his shadow and the
   camera interpolated between the game's frames.

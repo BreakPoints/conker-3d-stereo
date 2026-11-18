@@ -1299,10 +1299,10 @@ index 0000000..a0ffef6
 +
 +#endif
 diff --git a/ultramodern/include/ultramodern/config.hpp b/ultramodern/include/ultramodern/config.hpp
-index 2f22456..a5e5da0 100644
+index 2f22456..1e038bb 100644
 --- a/ultramodern/include/ultramodern/config.hpp
 +++ b/ultramodern/include/ultramodern/config.hpp
-@@ -57,6 +57,19 @@ namespace ultramodern {
+@@ -57,6 +57,21 @@ namespace ultramodern {
              Off,
              OptionCount
          };
@@ -1317,12 +1317,14 @@ index 2f22456..a5e5da0 100644
 +            InterlacedReversed,
 +            TopAndBottom,
 +            LeiaSR,
++            // Conker: full side by side, each eye a whole half-window picture.
++            SideBySideFull,
 +            OptionCount
 +        };
          enum class PresentationMode {
              Console,
              SkipBuffering,
-@@ -76,6 +89,19 @@ namespace ultramodern {
+@@ -76,6 +91,19 @@ namespace ultramodern {
              HighPrecisionFramebuffer hpfb_option;
              int rr_manual_value;
              int ds_option;
