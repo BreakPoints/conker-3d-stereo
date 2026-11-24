@@ -55,6 +55,11 @@ namespace {
     // depth (the auto-convergence loop's) instead of their own.
     constexpr uint32_t g_ex_setstereoscripted_v1 = 0x000034;
     constexpr uint32_t conker_stereo_world_id = 0x434B0001;
+    // G_EX_ID_AUTO (tools/rt64/include/rt64_extended_gbi.h): the group ID that keeps a
+    // projection out of the stereo shift while still letting RT64 pair it with last
+    // frame's and interpolate it. G_EX_ID_IGNORE (0) would also keep it flat, but it
+    // disables the pairing entirely, so the camera is shown at the game's own rate.
+    constexpr uint32_t g_ex_id_auto = 0xFFFFFFFFu;
     // The camera being played (D_800DBFF0).
     constexpr uint32_t current_play_camera = 0x800DBFF0;
 
@@ -218,11 +223,20 @@ extern "C" void conker_stereo_restore_end(uint8_t* rdram, recomp_context* ctx) {
 // the decal samples it. That pass must stay out of stereo: if the eye shift reaches it,
 // each eye's texture content moves, and the decal (whose texture coordinates are the
 // same for both eyes) shows the difference as a false disparity on the ground. Wrap
-// the whole pass in an untagged projection group (ID 0, G_EX_ID_IGNORE); the camera
-// restore it ends with tags itself.
+// the whole pass in a projection group that is NOT the world tag; the camera restore
+// it ends with tags itself.
+//
+// The ID must be G_EX_ID_AUTO, not G_EX_ID_IGNORE: RT64 only interpolates a
+// projection's camera between game frames when its group is paired with last frame's,
+// and an IGNORE group never pairs (GameFrame's view-projection matching). Unpaired, the
+// light camera steps at the game's rate while the decal it textures slides smoothly: RT64
+// interpolates that silhouette camera as a whole (ProjectionProcessor, upstream issue #76)
+// precisely so its texture content moves with the decal's interpolated texture
+// coordinates. IGNORE left the two out of step and the shadow vibrated between two
+// positions after the rebase onto 0.1.7, which added that interpolation.
 extern "C" void conker_shadow_image_begin(uint8_t* rdram, recomp_context* ctx) {
     gpr dl = ctx->r4;
-    put_projection_group(rdram, dl, 0, true, 0);
+    put_projection_group(rdram, dl, g_ex_id_auto, true, 0);
     ctx->r4 = dl;
 }
 

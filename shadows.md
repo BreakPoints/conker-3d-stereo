@@ -32,8 +32,16 @@ Fix (all in `recomp/rt64.patch` for the RT64 parts):
     projection stack for the rest of the display list instead of pushing and
     popping it. `func_150D1810` and `func_15019CC8` build world projections from
     the camera outside the setup, and they rely on the tag;
-  - `func_15184FA4` (the silhouette pass) runs under an untagged (ID 0) group, so
-    the light camera stays mono;
+  - `func_15184FA4` (the silhouette pass) runs under a projection group that is not
+    the world tag, so the light camera stays mono. Its ID is `G_EX_ID_AUTO`, not
+    `G_EX_ID_IGNORE`: RT64 only interpolates a projection's camera between game
+    frames when its group pairs with last frame's, and an IGNORE group never pairs,
+    which left the light camera stepping at the game's rate while the decal it
+    textures slid smoothly. Upstream 0.1.7 interpolates that silhouette camera as a
+    whole (RT64 `ProjectionProcessor`, issue #76) so its texture content moves with
+    the decal's interpolated texture coordinates; after the rebase onto 0.1.7 the
+    IGNORE ID left the two out of step and the shadow vibrated between two
+    positions.
   - `func_1510B7B4` (the world camera restore, which the silhouette pass ends
     with) is wrapped in its own tagged group, so the decal is tagged.
 
